@@ -2,7 +2,7 @@
 
 This simple tool will help you find kubernetes resources which are not managed via GitOps (flux2).
 
-![zombie gopher](assets/logo.png)
+<p align="center"><img src="https://github.com/raffis/gitops-zombies/blob/main/assets/logo.png?raw=true" alt="logo"/></p>
 
 ## How does it work?
 
