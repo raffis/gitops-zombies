@@ -15,6 +15,9 @@ archives:
   builds:
   - cli
 
+checksum:
+  name_template: 'checksums.txt'
+
 source:
   enabled: true
   name_template: "{{ .ProjectName }}_{{ .Version }}_source_code"
@@ -26,7 +29,9 @@ sboms:
   - "{{ .ProjectName }}_{{ .Version }}_sbom.spdx.json"
 
 dockers:
-- image_templates: ["ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-amd64"]
+- image_templates:
+  - ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}
+  - ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-amd64
   dockerfile: Dockerfile.release
   use: buildx
   ids:
@@ -72,7 +77,7 @@ signs:
 - cmd: cosign
   certificate: "${artifact}.pem"
   env:
-  - COSIGN_PASSWORD=
+  - COSIGN_EXPERIMENTAL=1
   args:
   - sign-blob
   - "--key=cosign.key"
@@ -83,6 +88,11 @@ signs:
   output: true
 
 docker_signs:
-- artifacts: images
-  env:
-  - COSIGN_PASSWORD=
+  - cmd: cosign
+    env:
+    - COSIGN_EXPERIMENTAL=1
+    artifacts: images
+    output: true
+    args:
+    - 'sign'
+    - '${artifact}'

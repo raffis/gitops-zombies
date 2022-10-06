@@ -36,9 +36,6 @@ jobs:
       - name: Setup Cosign
         uses: sigstore/cosign-installer@main
       - uses: anchore/sbom-action/download-syft@v0
-      - name: Get cosign key
-        run: |
-          echo "${{ secrets.COSIGN_KEY }}" > cosign.key
       - name: Create release and SBOM
         if: startsWith(github.ref, 'refs/tags/v')
         uses: goreleaser/goreleaser-action@v2
