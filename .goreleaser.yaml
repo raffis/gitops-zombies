@@ -1,0 +1,98 @@
+project_name: gitops-zombies
+
+builds:
+- id: cli
+  main: ./cmd/
+  binary: gitops-zombies
+  goos:
+  - linux
+  - darwin
+  - windows    
+
+archives:
+- id: cli
+  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  builds:
+  - cli
+
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_source_code"
+
+sboms:
+- id: source
+  artifacts: source
+  documents:
+  - "{{ .ProjectName }}_{{ .Version }}_sbom.spdx.json"
+
+dockers:
+- image_templates: ["ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-amd64"]
+  dockerfile: Dockerfile.release
+  use: buildx
+  ids:
+  - cli
+  build_flag_templates:
+  - --platform=linux/amd64
+  - --label=org.opencontainers.image.title={{ .ProjectName }}
+  - --label=org.opencontainers.image.description={{ .ProjectName }}
+  - --label=org.opencontainers.image.url=https://github.com/raffis/{{ .ProjectName }}
+  - --label=org.opencontainers.image.source=https://github.com/raffis/{{ .ProjectName }}
+  - --label=org.opencontainers.image.version={{ .Version }}
+  - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+  - --label=org.opencontainers.image.revision={{ .FullCommit }}
+  - --label=org.opencontainers.image.licenses=MIT
+- image_templates: ["ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-arm64v8"]
+  goarch: arm64
+  dockerfile: Dockerfile.release
+  use: buildx
+  ids:
+  - cli
+  build_flag_templates:
+  - --platform=linux/arm64/v8
+  - --label=org.opencontainers.image.title={{ .ProjectName }}
+  - --label=org.opencontainers.image.description={{ .ProjectName }}
+  - --label=org.opencontainers.image.url=https://github.com/raffis/{{ .ProjectName }}
+  - --label=org.opencontainers.image.source=https://github.com/raffis/{{ .ProjectName }}
+  - --label=org.opencontainers.image.version={{ .Version }}
+  - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+  - --label=org.opencontainers.image.revision={{ .FullCommit }}
+  - --label=org.opencontainers.image.licenses=MIT
+
+brews:
+- ids:
+  - cli
+  tap:
+    owner: raffis
+    name: gitops-zombies
+  folder: Formulas
+  test: |
+    system "#{bin}/kjournal help"      
+
+krews:
+- ids:
+  - cli
+  index:
+     owner: raffis
+     name: gitops-zombies
+     branch: master
+  description: s
+  short_description: s
+
+signs:
+- cmd: cosign
+  certificate: "${artifact}.pem"
+  env:
+  - COSIGN_PASSWORD=
+  args:
+  - sign-blob
+  - "--key=cosign.key"
+  - "--output-certificate=${certificate}"
+  - "--output-signature=${signature}"
+  - "${artifact}"
+  artifacts: checksum
+  output: true
+
+docker_signs:
+- artifacts: images
+  env:
+  - COSIGN_PASSWORD=
