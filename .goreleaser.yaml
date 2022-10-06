@@ -6,7 +6,7 @@ builds:
   binary: gitops-zombies
   goos:
   - linux
-  - darwin
+##  - darwin
   - windows    
 
 archives:
@@ -67,16 +67,6 @@ brews:
   folder: Formulas
   test: |
     system "#{bin}/kjournal help"      
-
-krews:
-- ids:
-  - cli
-  index:
-     owner: raffis
-     name: gitops-zombies
-     branch: master
-  description: s
-  short_description: s
 
 signs:
 - cmd: cosign

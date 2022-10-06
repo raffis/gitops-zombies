@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	VERSION = "0.0.0-dev"
+	version = "0.0.0-dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -83,7 +85,7 @@ func main() {
 
 func run(cmd *cobra.Command, args []string) error {
 	if flags.version {
-		fmt.Println(VERSION)
+		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 		return nil
 	}
 
