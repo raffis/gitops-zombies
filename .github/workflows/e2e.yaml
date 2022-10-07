@@ -25,10 +25,10 @@ jobs:
             ${{ runner.os }}-go-
       - name: Run tests
         run: make test
-      #- name: Send go coverage report
-      #  uses: shogo82148/actions-goveralls@v1
-      #  with:
-      #    path-to-profile: coverage.out
+      - name: Send go coverage report
+        uses: shogo82148/actions-goveralls@v1
+        with:
+          path-to-profile: coverage.out
       - name: Check if working tree is dirty
         run: |
           if [[ $(git diff --stat) != '' ]]; then
