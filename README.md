@@ -13,20 +13,26 @@ The app will also acknowledge the following things:
 * Ignores resources which are considered dynamic (metrics, leases, events, endpoints, ...)
 * Filter out resources which are created by the apiserver itself (like default rbacs)
 * Filters secrets which are managed by other parties including helm or ServiceAccount tokens
-* Checks if the referenced HelmRelease or kustomization exists
+* Checks if the referenced HelmRelease or Kustomization exists
 
 
 ## How do I install it?
 
 ```
-brew install raffis/gitops-zombies
+brew tap raffis/gitops-zombies
+brew install gitops-zombies
 ```
 
 ## How to use
 
 Exclude all resources which are not labeled `key: value`:
 ```
-gitops-zombies -l "key!=value"
+gitops-zombies
+```
+
+A more advanced call might include a filter like the following to exclude certain resources which are considered dynamic (besides the builtin exclusions):
+```
+gitops-zombies --context staging -l app.kubernetes.io/managed-by!=kops,app.kubernetes.io/name!=velero,io.cilium.k8s.policy.cluster!=default
 ```
 
 ## CLI reference
