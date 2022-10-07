@@ -12,11 +12,11 @@ RUN go mod download
 COPY cmd cmd
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o kjournal cmd/*
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o gitops-zombies cmd/*
 
-FROM alpine:3.16 as kjournal-cli
+FROM alpine:3.16 as gitops-zombies-cli
 WORKDIR /
-COPY --from=builder /workspace/kjournal /usr/bin/
+COPY --from=builder /workspace/gitops-zombies /usr/bin/
 USER 65532:65532
 
 ENTRYPOINT ["/usr/bin/gitops-zombies"]
