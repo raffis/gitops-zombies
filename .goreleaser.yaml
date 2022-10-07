@@ -69,7 +69,9 @@ brews:
   tap:
     owner: raffis
     name: gitops-zombies
-  folder: Formulas
+  description:  Identify kubernetes resources which are not managed by GitOps
+  homepage: https://github.com/raffis/{{ .ProjectName }}
+  folder: Formula
   test: |
     system "#{bin}/gitops-zombies -h"      
 
