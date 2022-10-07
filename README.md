@@ -25,7 +25,6 @@ brew install gitops-zombies
 
 ## How to use
 
-Exclude all resources which are not labeled `key: value`:
 ```
 gitops-zombies
 ```
