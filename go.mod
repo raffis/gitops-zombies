@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/spf13/cobra v1.5.0
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
+	gotest.tools/v3 v3.0.3
 	k8s.io/apimachinery v0.25.2
 	k8s.io/cli-runtime v0.25.2
 	k8s.io/client-go v0.25.2

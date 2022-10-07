@@ -44,11 +44,3 @@ jobs:
           args: release --rm-dist --skip-validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish formula
-        run: |
-          mkdir -p Formula
-          cp dist/gitops-zombies.rb Formula/
-          git add Formula/*
-          git commit Formula -m "publish formula"
-          git push
-

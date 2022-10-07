@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"gihub.com/raffis/flux-zombies/pkg/collector"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,6 +84,11 @@ func main() {
 	os.Exit(1)
 }
 
+var (
+	helmReleases   []unstructured.Unstructured
+	kustomizations []unstructured.Unstructured
+)
+
 func run(cmd *cobra.Command, args []string) error {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
@@ -114,8 +120,37 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	helmReleases, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
+		Group:    "helm.toolkit.fluxcd.io",
+		Version:  "v2beta1",
+		Resource: "helmreleases",
+	}))
+
+	if err != nil {
+		return fmt.Errorf("failed to get helmreleases: %w", err)
+	}
+
+	kustomizations, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
+		Group:    "kustomize.toolkit.fluxcd.io",
+		Version:  "v1beta2",
+		Resource: "kustomizations",
+	}))
+
+	if err != nil {
+		return fmt.Errorf("failed to get kustomizations: %w", err)
+	}
+
 	ch := make(chan unstructured.Unstructured)
 	var wgProducer, wgConsumer sync.WaitGroup
+
+	discover := collector.NewDiscovery(
+		logger,
+		collector.IgnoreOwnedResource(),
+		collector.IgnoreServiceAccountSecret(),
+		collector.IgnoreHelmSecret(),
+		collector.IgnoreIfHelmReleaseFound(helmReleases),
+		collector.IgnoreIfKustomizationFound(kustomizations),
+	)
 
 	for _, group := range list {
 		logger.Debugf("discover resource group %#v", group.GroupVersion)
@@ -144,6 +179,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 			resAPI := client.Resource(gvr)
 
+			// Skip APIS which do not support list
 			if !slices.Contains(resource.Verbs, "list") {
 				continue
 			}
@@ -152,7 +188,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 			go func(resAPI dynamic.ResourceInterface) {
 				defer wgProducer.Done()
-				handleResource(context.TODO(), resAPI, ch)
+
+				if err := handleResource(context.TODO(), discover, resAPI, ch); err != nil {
+					logger.Failuref("could not hanlder resource: %s", err)
+				}
 			}(resAPI)
 		}
 	}
@@ -170,6 +209,18 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func listResources(ctx context.Context, resAPI dynamic.ResourceInterface) (items []unstructured.Unstructured, err error) {
+	list, err := resAPI.List(ctx, metav1.ListOptions{
+		LabelSelector: getLabelSelector(),
+	})
+
+	if err != nil {
+		return items, err
+	}
+
+	return list.Items, err
+}
+
 func getLabelSelector() string {
 	selector := ""
 	if !flags.includeAll {
@@ -183,7 +234,7 @@ func getLabelSelector() string {
 	return selector
 }
 
-func handleResource(ctx context.Context, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured) error {
+func handleResource(ctx context.Context, discover collector.Interface, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured) error {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
 		LabelSelector: getLabelSelector(),
 	})
@@ -192,43 +243,7 @@ func handleResource(ctx context.Context, resAPI dynamic.ResourceInterface, ch ch
 		return err
 	}
 
-	for _, res := range list.Items {
-		logger.Debugf("validate resource %s %s %s", res.GetName(), res.GetNamespace(), res.GetAPIVersion())
-
-		if refs := res.GetOwnerReferences(); len(refs) > 0 {
-			logger.Debugf("ignore resource owned by parent %s %s %s", res.GetName(), res.GetNamespace(), res.GetAPIVersion())
-			continue
-		}
-
-		labels := res.GetLabels()
-		if helmName, ok := labels[FLUX_HELM_NAME_LABEL]; ok {
-			if helmNamespace, ok := labels[FLUX_HELM_NAMESPACE_LABEL]; ok {
-				logger.Debugf("helm %s %s\n", helmName, helmNamespace)
-				continue
-			}
-		}
-
-		if ksName, ok := labels[FLUX_KUSTOMIZE_NAME_LABEL]; ok {
-			if ksNamespace, ok := labels[FLUX_KUSTOMIZE_NAMESPACE_LABEL]; ok {
-				logger.Debugf("ks %s %s\n", ksName, ksNamespace)
-				continue
-			}
-		}
-
-		if res.GetKind() == "Secret" && res.GetAPIVersion() == "v1" {
-			if _, ok := res.GetAnnotations()["kubernetes.io/service-account.name"]; ok {
-				continue
-			}
-
-			if v, ok := res.GetLabels()["owner"]; ok && v == "helm" {
-				continue
-			}
-		}
-
-		ch <- res
-	}
-
-	return nil
+	return discover.Discover(ctx, list, ch)
 }
 
 func printer(ch chan unstructured.Unstructured) error {
