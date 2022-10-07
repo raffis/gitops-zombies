@@ -71,7 +71,7 @@ brews:
     name: gitops-zombies
   folder: Formulas
   test: |
-    system "#{bin}/kjournal help"      
+    system "#{bin}/gitops-zombies -h"      
 
 signs:
 - cmd: cosign
