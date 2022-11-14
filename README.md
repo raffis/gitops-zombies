@@ -1,5 +1,10 @@
 # GitOps zombies
 
+![Release](https://img.shields.io/github/v/release/raffis/gitops-zombies)
+[![release](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/raffis/gitops-zombies)](https://goreportcard.com/report/github.com/raffis/gitops-zombies)
+[![Coverage Status](https://coveralls.io/repos/github/raffis/gitops-zombies/badge.svg?branch=main)](https://coveralls.io/github/raffis/gitops-zombies?branch=main)
+
 This simple tool will help you find kubernetes resources which are not managed via GitOps (flux2).
 
 <p align="center"><img src="https://github.com/raffis/gitops-zombies/blob/main/assets/logo.png?raw=true" alt="logo"/></p>
