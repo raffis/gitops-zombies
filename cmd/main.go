@@ -88,11 +88,6 @@ func main() {
 	os.Exit(1)
 }
 
-var (
-	helmReleases   []unstructured.Unstructured
-	kustomizations []unstructured.Unstructured
-)
-
 func run(cmd *cobra.Command, args []string) error {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
@@ -108,6 +103,8 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	cfg.WarningHandler = rest.NoWarnings{}
 
 	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
@@ -136,7 +133,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	helmReleases, err = listResources(context.TODO(), dynClient.Resource(schema.GroupVersionResource{
+	helmReleases, err := listResources(context.TODO(), dynClient.Resource(schema.GroupVersionResource{
 		Group:    "helm.toolkit.fluxcd.io",
 		Version:  "v2beta1",
 		Resource: "helmreleases",
@@ -174,7 +171,7 @@ func run(cmd *cobra.Command, args []string) error {
 		for _, resource := range group.APIResources {
 			logger.Debugf("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
 
-			if kubeconfigArgs.Namespace != nil && !resource.Namespaced {
+			if *kubeconfigArgs.Namespace != "" && !resource.Namespaced {
 				logger.Debugf("skipping cluster scoped resource %#v.%#v.%#v, namespaced scope was requested", resource.Name, resource.Group, resource.Version)
 				continue
 			}

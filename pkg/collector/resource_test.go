@@ -4,9 +4,11 @@ import (
 	"context"
 	"testing"
 
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type NullLogger struct {
@@ -139,10 +141,10 @@ func TestDisovery(t *testing.T) {
 			expectedPass: 2,
 		},
 		{
-			name: "A resource which is part of a kustomization is ignored",
+			name: "A resource which is part of a kustomization but without a matching inventory entry is not ignored",
 			filters: func() []FilterFunc {
-				kustomizations := &unstructured.UnstructuredList{}
-				ks := unstructured.Unstructured{}
+				kustomizations := &ksapi.KustomizationList{}
+				ks := ksapi.Kustomization{}
 				ks.SetName("release")
 				ks.SetNamespace("test")
 
@@ -159,10 +161,52 @@ func TestDisovery(t *testing.T) {
 				alsoExpected.SetName("service-account-secret")
 				alsoExpected.SetLabels(map[string]string{
 					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
-					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "not-existing",
+					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "test",
+				})
+
+				list.Items = append(list.Items, expected, alsoExpected)
+				return list
+			},
+			expectedPass: 2,
+		},
+		{
+			name: "A resource which is part of a kustomization and has a valid matching inventory entry is ignored",
+			filters: func() []FilterFunc {
+				kustomizations := &ksapi.KustomizationList{}
+				ks := ksapi.Kustomization{}
+				ks.SetName("release")
+				ks.SetNamespace("test")
+				ks.Status.Inventory = &ksapi.ResourceInventory{
+					Entries: []ksapi.ResourceRef{
+						{
+							ID: "test_service-account-secret__Secret",
+						},
+					},
+				}
+
+				kustomizations.Items = append(kustomizations.Items, ks)
+
+				return []FilterFunc{IgnoreIfKustomizationFound(kustomizations.Items)}
+			},
+			list: func() *unstructured.UnstructuredList {
+				list := &unstructured.UnstructuredList{}
+				expected := unstructured.Unstructured{}
+				expected.SetName("resource")
+
+				alsoExpected := unstructured.Unstructured{}
+				alsoExpected.SetName("service-account-secret")
+				alsoExpected.SetLabels(map[string]string{
+					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
+					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "test",
 				})
 
 				notExpected := unstructured.Unstructured{}
+				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Secret",
+				})
+				notExpected.SetNamespace("test")
 				notExpected.SetName("service-account-secret")
 				notExpected.SetLabels(map[string]string{
 					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
