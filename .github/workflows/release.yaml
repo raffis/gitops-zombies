@@ -14,9 +14,6 @@ permissions:
   id-token: write # needed for keyless signing
   packages: write # needed for ghcr access
 
-env:
-  APP: kjournal
-
 jobs:
   build:
     name: Build
