@@ -2,7 +2,9 @@ package collector
 
 import (
 	"context"
+	"fmt"
 
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -104,13 +106,26 @@ func IgnoreIfHelmReleaseFound(helmReleases []unstructured.Unstructured) FilterFu
 	}
 }
 
-func IgnoreIfKustomizationFound(kustomizations []unstructured.Unstructured) FilterFunc {
+func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc {
 	return func(res unstructured.Unstructured, logger logger) bool {
 		labels := res.GetLabels()
 		if ksName, ok := labels[FLUX_KUSTOMIZE_NAME_LABEL]; ok {
 			if ksNamespace, ok := labels[FLUX_KUSTOMIZE_NAMESPACE_LABEL]; ok {
-				if hasResource(kustomizations, ksName, ksNamespace) {
-					return true
+				if ks := findKustomization(kustomizations, ksName, ksNamespace); ks != nil {
+					id := fmt.Sprintf("%s_%s_%s_%s", res.GetNamespace(), res.GetName(), res.GroupVersionKind().Group, res.GroupVersionKind().Kind)
+					logger.Debugf("lookup kustomization [%s.%s] inventory for %s", ksName, ksNamespace, id)
+
+					if ks.Status.Inventory != nil {
+						for _, entry := range ks.Status.Inventory.Entries {
+							if entry.ID == id {
+								return true
+							}
+						}
+					}
+
+					logger.Debugf("resource %s %s %s is not part of the kustomization [%s.%s] inventory", res.GetName(), res.GetNamespace(), res.GetAPIVersion(), ksName, ksNamespace)
+					return false
+
 				} else {
 					logger.Debugf("kustomization [%s.%s] not found from resource  %s %s %s\n", ksName, ksNamespace, res.GetName(), res.GetNamespace(), res.GetAPIVersion())
 				}
@@ -129,4 +144,14 @@ func hasResource(pool []unstructured.Unstructured, name, namespace string) bool 
 	}
 
 	return false
+}
+
+func findKustomization(pool []ksapi.Kustomization, name, namespace string) *ksapi.Kustomization {
+	for _, res := range pool {
+		if res.GetName() == name && res.GetNamespace() == namespace {
+			return &res
+		}
+	}
+
+	return nil
 }

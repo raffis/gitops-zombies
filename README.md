@@ -1,19 +1,25 @@
 # GitOps zombies
 
+![Release](https://img.shields.io/github/v/release/raffis/gitops-zombies)
+[![release](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/raffis/gitops-zombies)](https://goreportcard.com/report/github.com/raffis/gitops-zombies)
+[![Coverage Status](https://coveralls.io/repos/github/raffis/gitops-zombies/badge.svg?branch=main)](https://coveralls.io/github/raffis/gitops-zombies?branch=main)
+
 This simple tool will help you find kubernetes resources which are not managed via GitOps (flux2).
 
 <p align="center"><img src="https://github.com/raffis/gitops-zombies/blob/main/assets/logo.png?raw=true" alt="logo"/></p>
 
 ## How does it work?
 
-It will discover all apis installed on a cluster and identify resources which are not part of a Kustomization or a HelmRelease.
-The app will also acknowledge the following things:
+gitops-zombies discovers all apis installed on a cluster and identify resources which are not part of a Kustomization or a HelmRelease.
+It also acknowledges the following facts:
 
 * Ignores resources which are owned by a parent resource (For example pods which are created by a deployment)
 * Ignores resources which are considered dynamic (metrics, leases, events, endpoints, ...)
 * Filter out resources which are created by the apiserver itself (like default rbacs)
 * Filters secrets which are managed by other parties including helm or ServiceAccount tokens
 * Checks if the referenced HelmRelease or Kustomization exists
+* Checks if resources are still part of the kustomization inventory
 
 
 ## How do I install it?
