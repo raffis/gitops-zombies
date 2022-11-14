@@ -124,7 +124,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Group:    "helm.toolkit.fluxcd.io",
 		Version:  "v2beta1",
 		Resource: "helmreleases",
-	}))
+	}).Namespace(*kubeconfigArgs.Namespace))
 
 	if err != nil {
 		return fmt.Errorf("failed to get helmreleases: %w", err)
@@ -134,7 +134,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Group:    "kustomize.toolkit.fluxcd.io",
 		Version:  "v1beta2",
 		Resource: "kustomizations",
-	}))
+	}).Namespace(*kubeconfigArgs.Namespace))
 
 	if err != nil {
 		return fmt.Errorf("failed to get kustomizations: %w", err)
@@ -163,6 +163,11 @@ func run(cmd *cobra.Command, args []string) error {
 		for _, resource := range group.APIResources {
 			logger.Debugf("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
 
+			if kubeconfigArgs.Namespace != nil && !resource.Namespaced {
+				logger.Debugf("skipping cluster scoped resource %#v.%#v.%#v, namespaced scope was requested", resource.Name, resource.Group, resource.Version)
+				continue
+			}
+
 			gvr := schema.GroupVersionResource{
 				Group:    gv.Group,
 				Version:  gv.Version,
@@ -177,7 +182,7 @@ func run(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			resAPI := client.Resource(gvr)
+			resAPI := client.Resource(gvr).Namespace(*kubeconfigArgs.Namespace)
 
 			// Skip APIS which do not support list
 			if !slices.Contains(resource.Verbs, "list") {
@@ -190,7 +195,7 @@ func run(cmd *cobra.Command, args []string) error {
 				defer wgProducer.Done()
 
 				if err := handleResource(context.TODO(), discover, resAPI, ch); err != nil {
-					logger.Failuref("could not hanlder resource: %s", err)
+					logger.Failuref("could not handle resource: %s", err)
 				}
 			}(resAPI)
 		}
