@@ -113,7 +113,7 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 			if ksNamespace, ok := labels[FLUX_KUSTOMIZE_NAMESPACE_LABEL]; ok {
 				if ks := findKustomization(kustomizations, ksName, ksNamespace); ks != nil {
 					id := fmt.Sprintf("%s_%s_%s_%s", res.GetNamespace(), res.GetName(), res.GroupVersionKind().Group, res.GroupVersionKind().Kind)
-					logger.Debugf("lookup kustomization [%s.%s] inventory for %s", res.GetName(), res.GetNamespace(), id)
+					logger.Debugf("lookup kustomization [%s.%s] inventory for %s", ksName, ksNamespace, id)
 
 					if ks.Status.Inventory != nil {
 						for _, entry := range ks.Status.Inventory.Entries {
@@ -123,6 +123,7 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 						}
 					}
 
+					logger.Debugf("resource %s %s %s is not part of the kustomization [%s.%s] inventory", res.GetName(), res.GetNamespace(), res.GetAPIVersion(), ksName, ksNamespace)
 					return false
 
 				} else {
