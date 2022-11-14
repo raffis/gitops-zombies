@@ -137,7 +137,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Group:    "helm.toolkit.fluxcd.io",
 		Version:  "v2beta1",
 		Resource: "helmreleases",
-	}).Namespace(*kubeconfigArgs.Namespace))
+	}))
 
 	if err != nil {
 		return fmt.Errorf("failed to get helmreleases: %w", err)
