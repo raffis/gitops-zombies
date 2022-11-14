@@ -12,7 +12,7 @@ endif
 
 rwildcard=$(foreach d,$(wildcard $(addsuffix *,$(1))),$(call rwildcard,$(d)/,$(2)) $(filter $(subst *,%,$(2)),$(d)))
 
-all: test build
+all: lint test build
 
 tidy:
 	go mod tidy -compat=1.19
@@ -22,6 +22,9 @@ fmt:
 
 test:
 	go test -coverprofile coverage.out -v ./...
+
+lint:
+	golangci-lint run
 
 vet:
 	go vet ./...

@@ -1,9 +1,10 @@
 module gihub.com/raffis/flux-zombies
 
-go 1.18
+go 1.19
 
 require (
 	github.com/spf13/cobra v1.5.0
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	gotest.tools/v3 v3.0.3
 	k8s.io/apimachinery v0.25.2
@@ -52,6 +53,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect

@@ -25,16 +25,7 @@ const (
 	date    = "unknown"
 )
 
-var rootCmd = &cobra.Command{
-	Use:           "gitops-zombies",
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	Short:         "Find kubernetes resources which are not managed by GitOps",
-	Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
-	RunE:          run,
-}
-
-type Args struct {
+type args struct {
 	verbose       bool
 	labelSelector string
 	includeAll    bool
@@ -42,26 +33,48 @@ type Args struct {
 }
 
 const (
-	FLUX_HELM_NAME_LABEL           = "helm.toolkit.fluxcd.io/name"
-	FLUX_HELM_NAMESPACE_LABEL      = "helm.toolkit.fluxcd.io/namespace"
-	FLUX_KUSTOMIZE_NAME_LABEL      = "kustomize.toolkit.fluxcd.io/name"
-	FLUX_KUSTOMIZE_NAMESPACE_LABEL = "kustomize.toolkit.fluxcd.io/namespace"
-	DEFAULT_LABEL_SELECTOR         = "kubernetes.io/bootstrapping!=rbac-defaults,kube-aggregator.kubernetes.io/automanaged!=onstart,kube-aggregator.kubernetes.io/automanaged!=true"
+	defaultLabelSelector = "kubernetes.io/bootstrapping!=rbac-defaults,kube-aggregator.kubernetes.io/automanaged!=onstart,kube-aggregator.kubernetes.io/automanaged!=true"
 )
 
-var kubeconfigArgs = genericclioptions.NewConfigFlags(false)
-var logger = stderrLogger{stderr: os.Stderr}
+func main() {
+	defaultLogger := stderrLogger{
+		stderr: os.Stderr,
+	}
+	rootCmd, err := parseCliArgs()
+	if err != nil {
+		defaultLogger.Failuref("%v", err)
+		os.Exit(1)
+	}
 
-var flags Args
-var printFlags *k8sget.PrintFlags
+	err = rootCmd.Execute()
+	if err != nil {
+		defaultLogger.Failuref("%v", err)
+		os.Exit(1)
+	}
+}
 
-func init() {
-	printFlags = k8sget.NewGetPrintFlags()
+func parseCliArgs() (*cobra.Command, error) {
+	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
+	flags := args{}
+	printFlags := k8sget.NewGetPrintFlags()
 
-	apiServer := ""
-	kubeconfigArgs.APIServer = &apiServer
-	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
-	rootCmd.RegisterFlagCompletionFunc("context", contextsCompletionFunc)
+	rootCmd := cobra.Command{
+		Use:           "gitops-zombies",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Short:         "Find kubernetes resources which are not managed by GitOps",
+		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluster and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := run(kubeconfigArgs, stderrLogger{
+				stderr:  os.Stderr,
+				verbose: flags.verbose,
+			}, flags, printFlags)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+	}
 
 	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
 	rootCmd.Flags().BoolVarP(&flags.verbose, "verbose", "v", flags.verbose, "Verbose mode (Logged to stderr)")
@@ -71,73 +84,76 @@ func init() {
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
-}
 
-func main() {
-	err := rootCmd.Execute()
-
-	if err == nil {
-		os.Exit(0)
+	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
+	err := rootCmd.RegisterFlagCompletionFunc("context", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return contextsCompletionFunc(kubeconfigArgs, toComplete)
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	logger.Failuref("%v", err)
-	os.Exit(1)
+	return &rootCmd, nil
 }
 
-var (
-	helmReleases   []unstructured.Unstructured
-	kustomizations []unstructured.Unstructured
-)
-
-func run(cmd *cobra.Command, args []string) error {
+func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) error {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 		return nil
 	}
 
-	logger = stderrLogger{
-		stderr:  os.Stderr,
-		verbose: flags.verbose,
-	}
-
-	cfg, err := kubeconfigArgs.ToRESTConfig()
+	// default processing
+	gitopsClient, err := getSimpleClient(kubeconfigArgs)
 	if err != nil {
 		return err
 	}
 
-	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	clusterSimpleClient, err := getSimpleClient(kubeconfigArgs)
 	if err != nil {
 		return err
 	}
 
-	_, list, err := disc.ServerGroupsAndResources()
+	clusterDiscoveryClient, err := getDiscoveryClient(kubeconfigArgs)
 	if err != nil {
 		return err
 	}
 
-	client, err := dynamic.NewForConfig(cfg)
+	zombies, err := detectZombies(logger, flags, gitopsClient, clusterSimpleClient, clusterDiscoveryClient)
 	if err != nil {
 		return err
 	}
 
-	helmReleases, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
-		Group:    "helm.toolkit.fluxcd.io",
-		Version:  "v2beta1",
-		Resource: "helmreleases",
-	}))
+	return printZombies(zombies, printFlags)
+}
 
+func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient) ([]unstructured.Unstructured, error) {
+	var zombies []unstructured.Unstructured
+
+	logger.Debugf("⎈ Helm releases ⎈")
+	helmReleases, err := getHelmReleases(gitopsClient, flags)
 	if err != nil {
-		return fmt.Errorf("failed to get helmreleases: %w", err)
+		return nil, fmt.Errorf("failed to get helmreleases: %w", err)
+	}
+	for _, h := range helmReleases {
+		logger.Debugf(h.GetName())
 	}
 
-	kustomizations, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
-		Group:    "kustomize.toolkit.fluxcd.io",
-		Version:  "v1beta2",
-		Resource: "kustomizations",
-	}))
-
+	logger.Debugf("👷 Kustomizations 👷")
+	kustomizations, err := getKustomizations(gitopsClient, flags)
 	if err != nil {
-		return fmt.Errorf("failed to get kustomizations: %w", err)
+		return nil, fmt.Errorf("failed to get helmreleases: %w", err)
+	}
+	for _, k := range kustomizations {
+		logger.Debugf(k.GetName())
+	}
+
+	logger.Debugf("👨‍👩‍👧‍👧 Groups 👨‍👩‍👧‍👧")
+	list, err := listServerGroupsAndResources(clusterDiscoveryClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list groups and resources: %w", err)
+	}
+	for _, g := range list {
+		logger.Debugf(g.GroupVersion)
 	}
 
 	ch := make(chan unstructured.Unstructured)
@@ -152,79 +168,108 @@ func run(cmd *cobra.Command, args []string) error {
 		collector.IgnoreIfKustomizationFound(kustomizations),
 	)
 
+	logger.Debugf("⚙️ Processing ...")
 	for _, group := range list {
-		logger.Debugf("discover resource group %#v", group.GroupVersion)
+		logger.Debugf("🔎 Discover resource group %#v", group.GroupVersion)
+
 		gv, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-	RESOURCES:
 		for _, resource := range group.APIResources {
-			logger.Debugf("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
-
-			gvr := schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: resource.Name,
-			}
-
-			if !flags.includeAll {
-				for _, listed := range blacklist {
-					if listed == gvr {
-						continue RESOURCES
-					}
-				}
-			}
-
-			resAPI := client.Resource(gvr)
-
-			// Skip APIS which do not support list
-			if !slices.Contains(resource.Verbs, "list") {
+			gvr, err := validateResource(gv, resource, flags)
+			if err != nil {
+				logger.Debugf(err.Error())
 				continue
 			}
 
+			resAPI := clusterSimpleClient.Resource(*gvr)
 			wgProducer.Add(1)
 
-			go func(resAPI dynamic.ResourceInterface) {
+			go func() {
 				defer wgProducer.Done()
 
-				if err := handleResource(context.TODO(), discover, resAPI, ch); err != nil {
-					logger.Failuref("could not hanlder resource: %s", err)
+				if err := handleResource(context.TODO(), discover, resAPI, ch, flags); err != nil {
+					logger.Failuref("could not handle resource: %s", err)
 				}
-			}(resAPI)
+			}()
 		}
 	}
 
 	wgConsumer.Add(1)
 	go func() {
 		defer wgConsumer.Done()
-		printer(ch)
+		for res := range ch {
+			zombies = append(zombies, res)
+		}
 	}()
 
 	wgProducer.Wait()
 	close(ch)
 	wgConsumer.Wait()
 
-	return nil
+	return zombies, nil
 }
 
-func listResources(ctx context.Context, resAPI dynamic.ResourceInterface) (items []unstructured.Unstructured, err error) {
-	list, err := resAPI.List(ctx, metav1.ListOptions{
-		LabelSelector: getLabelSelector(),
-	})
-
+func getSimpleClient(kubeconfigArgs *genericclioptions.ConfigFlags) (dynamic.Interface, error) {
+	cfg, err := kubeconfigArgs.ToRESTConfig()
 	if err != nil {
-		return items, err
+		return nil, err
 	}
 
-	return list.Items, err
+	client, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
-func getLabelSelector() string {
+func getDiscoveryClient(kubeconfigArgs *genericclioptions.ConfigFlags) (*discovery.DiscoveryClient, error) {
+	cfg, err := kubeconfigArgs.ToRESTConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func getHelmReleases(gitopsClient dynamic.Interface, flags args) ([]unstructured.Unstructured, error) {
+	helmReleases, err := listResources(context.TODO(), gitopsClient.Resource(schema.GroupVersionResource{
+		Group:    "helm.toolkit.fluxcd.io",
+		Version:  "v2beta1",
+		Resource: "helmreleases",
+	}), flags)
+	if err != nil {
+		return nil, err
+	}
+
+	return helmReleases, nil
+}
+
+func getKustomizations(gitopsClient dynamic.Interface, flags args) ([]unstructured.Unstructured, error) {
+	kustomizations, err := listResources(context.TODO(), gitopsClient.Resource(schema.GroupVersionResource{
+		Group:    "kustomize.toolkit.fluxcd.io",
+		Version:  "v1beta2",
+		Resource: "kustomizations",
+	}), flags)
+	if err != nil {
+		return nil, err
+	}
+
+	return kustomizations, nil
+}
+
+func getLabelSelector(flags args) string {
 	selector := ""
 	if !flags.includeAll {
-		selector = DEFAULT_LABEL_SELECTOR
+		selector = defaultLabelSelector
 	}
 
 	if flags.labelSelector != "" {
@@ -234,11 +279,53 @@ func getLabelSelector() string {
 	return selector
 }
 
-func handleResource(ctx context.Context, discover collector.Interface, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured) error {
+func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, flags args) (items []unstructured.Unstructured, err error) {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
-		LabelSelector: getLabelSelector(),
+		LabelSelector: getLabelSelector(flags),
 	})
+	if err != nil {
+		return items, err
+	}
 
+	return list.Items, err
+}
+
+func listServerGroupsAndResources(clusterDiscoveryClient *discovery.DiscoveryClient) ([]*metav1.APIResourceList, error) {
+	_, list, err := clusterDiscoveryClient.ServerGroupsAndResources()
+	if err != nil {
+		return nil, err
+	}
+
+	return list, err
+}
+
+func validateResource(gv schema.GroupVersion, resource metav1.APIResource, flags args) (*schema.GroupVersionResource, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    gv.Group,
+		Version:  gv.Version,
+		Resource: resource.Name,
+	}
+
+	if !flags.includeAll {
+		for _, listed := range getBlacklist() {
+			if listed == gvr {
+				return nil, fmt.Errorf("🙈 ignoring %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)
+			}
+		}
+	}
+
+	// Skip APIS which do not support list
+	if !slices.Contains(resource.Verbs, "list") {
+		return nil, fmt.Errorf("🙉 ignoring %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)
+	}
+
+	return &gvr, nil
+}
+
+func handleResource(ctx context.Context, discover collector.Interface, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured, flags args) error {
+	list, err := resAPI.List(ctx, metav1.ListOptions{
+		LabelSelector: getLabelSelector(flags),
+	})
 	if err != nil {
 		return err
 	}
@@ -246,18 +333,19 @@ func handleResource(ctx context.Context, discover collector.Interface, resAPI dy
 	return discover.Discover(ctx, list, ch)
 }
 
-func printer(ch chan unstructured.Unstructured) error {
+func printZombies(zombies []unstructured.Unstructured, printFlags *k8sget.PrintFlags) error {
 	p, err := printFlags.ToPrinter()
 	if err != nil {
 		return err
 	}
 
-	for res := range ch {
+	for _, zombie := range zombies {
 		if *printFlags.OutputFormat == "" {
-			ok := res.GetObjectKind().GroupVersionKind()
-			fmt.Printf("%s: %s.%s\n", ok.String(), res.GetName(), res.GetNamespace())
+			ok := zombie.GetObjectKind().GroupVersionKind()
+			fmt.Printf("🧟 %s: %s.%s\n", ok.String(), zombie.GetName(), zombie.GetNamespace())
 		} else {
-			if err := p.PrintObj(&res, os.Stdout); err != nil {
+			z := zombie
+			if err := p.PrintObj(&z, os.Stdout); err != nil {
 				return err
 			}
 		}
