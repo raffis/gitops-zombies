@@ -8,14 +8,18 @@ import (
 	"sync"
 
 	"gihub.com/raffis/flux-zombies/pkg/collector"
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
 )
 
@@ -115,12 +119,24 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	client, err := dynamic.NewForConfig(cfg)
+	dynClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}
 
-	helmReleases, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
+	cfg.GroupVersion = &ksapi.GroupVersion
+	var scheme = runtime.NewScheme()
+	ksapi.AddToScheme(scheme)
+	var codecs = serializer.NewCodecFactory(scheme)
+	cfg.NegotiatedSerializer = codecs.WithoutConversion()
+	cfg.APIPath = "/apis"
+
+	structClient, err := rest.RESTClientFor(cfg)
+	if err != nil {
+		return err
+	}
+
+	helmReleases, err = listResources(context.TODO(), dynClient.Resource(schema.GroupVersionResource{
 		Group:    "helm.toolkit.fluxcd.io",
 		Version:  "v2beta1",
 		Resource: "helmreleases",
@@ -130,12 +146,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get helmreleases: %w", err)
 	}
 
-	kustomizations, err = listResources(context.TODO(), client.Resource(schema.GroupVersionResource{
-		Group:    "kustomize.toolkit.fluxcd.io",
-		Version:  "v1beta2",
-		Resource: "kustomizations",
-	}).Namespace(*kubeconfigArgs.Namespace))
-
+	kustomizations, err := listKustomizations(context.TODO(), structClient)
 	if err != nil {
 		return fmt.Errorf("failed to get kustomizations: %w", err)
 	}
@@ -182,7 +193,7 @@ func run(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			resAPI := client.Resource(gvr).Namespace(*kubeconfigArgs.Namespace)
+			resAPI := dynClient.Resource(gvr).Namespace(*kubeconfigArgs.Namespace)
 
 			// Skip APIS which do not support list
 			if !slices.Contains(resource.Verbs, "list") {
@@ -224,6 +235,22 @@ func listResources(ctx context.Context, resAPI dynamic.ResourceInterface) (items
 	}
 
 	return list.Items, err
+}
+
+func listKustomizations(ctx context.Context, client *rest.RESTClient) (items []ksapi.Kustomization, err error) {
+	ks := &ksapi.KustomizationList{}
+
+	r := client.
+		Get().
+		Resource("kustomizations").
+		Do(ctx)
+
+	err = r.Into(ks)
+	if err != nil {
+		return []ksapi.Kustomization{}, err
+	}
+
+	return ks.Items, err
 }
 
 func getLabelSelector() string {
