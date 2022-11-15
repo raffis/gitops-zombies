@@ -22,6 +22,9 @@ source:
   enabled: true
   name_template: "{{ .ProjectName }}_{{ .Version }}_source_code"
 
+changelog:
+  use: github-native
+
 sboms:
 - id: source
   artifacts: source
@@ -69,6 +72,7 @@ brews:
   tap:
     owner: raffis
     name: gitops-zombies
+    token: "{{ .Env.REPO_TOKEN }}"
   description:  Identify kubernetes resources which are not managed by GitOps
   homepage: https://github.com/raffis/{{ .ProjectName }}
   folder: Formula
