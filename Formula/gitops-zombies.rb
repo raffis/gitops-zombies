@@ -6,12 +6,30 @@ class GitopsZombies < Formula
   desc "Identify kubernetes resources which are not managed by GitOps"
   homepage "https://github.com/raffis/gitops-zombies"
   version "0.0.4"
-  depends_on :linux
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.4/gitops-zombies_0.0.4_darwin_arm64.tar.gz"
+      sha256 "8a1417db02ce9b04ad6953885bbb649c59afce2661be91a63d4f964dd46bb554"
+
+      def install
+        bin.install "gitops-zombies"
+      end
+    end
+    if Hardware::CPU.intel?
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.4/gitops-zombies_0.0.4_darwin_amd64.tar.gz"
+      sha256 "245bb637a431ed9fbbba409fe49271b14ba42e8a8442d3993e275b663cfd24c7"
+
+      def install
+        bin.install "gitops-zombies"
+      end
+    end
+  end
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
       url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.4/gitops-zombies_0.0.4_linux_arm64.tar.gz"
-      sha256 "941170cc9b59b2f411986d10bf2b72ffe2f9b4234a4213591e05ca5041625715"
+      sha256 "333db774648bade5e079252b53b258b33dab7e12bc590e1de7bcd55b7f8c55ee"
 
       def install
         bin.install "gitops-zombies"
@@ -19,7 +37,7 @@ class GitopsZombies < Formula
     end
     if Hardware::CPU.intel?
       url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.4/gitops-zombies_0.0.4_linux_amd64.tar.gz"
-      sha256 "0681b8dc4c7b19b457390938b61b2e8cada240ab0ca2a2846cd4e2f596b335e2"
+      sha256 "73cb459725b48e7ee7fb2ef4aaa449cb9a9b638a3da4fa69f165d27063ecd94c"
 
       def install
         bin.install "gitops-zombies"
