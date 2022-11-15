@@ -13,9 +13,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/clientcmd"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
 )
 
@@ -26,10 +26,12 @@ const (
 )
 
 type args struct {
-	verbose       bool
-	labelSelector string
-	includeAll    bool
-	version       bool
+	kubeconfig           string
+	verbose              bool
+	gitopsLabelSelector  string
+	clusterLabelSelector string
+	includeAll           bool
+	version              bool
 }
 
 const (
@@ -54,7 +56,6 @@ func main() {
 }
 
 func parseCliArgs() (*cobra.Command, error) {
-	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
 	flags := args{}
 	printFlags := k8sget.NewGetPrintFlags()
 
@@ -64,61 +65,94 @@ func parseCliArgs() (*cobra.Command, error) {
 		SilenceErrors: true,
 		Short:         "Find kubernetes resources which are not managed by GitOps",
 		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluster and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			err := run(kubeconfigArgs, stderrLogger{
-				stderr:  os.Stderr,
-				verbose: flags.verbose,
-			}, flags, printFlags)
-			if err != nil {
-				return err
-			}
-			return nil
-		},
 	}
 
+	rootCmd.Flags().StringVar(&flags.kubeconfig, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to the kubeconfig file to use for CLI requests.")
 	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
-	rootCmd.Flags().BoolVarP(&flags.verbose, "verbose", "v", flags.verbose, "Verbose mode (Logged to stderr)")
+	rootCmd.Flags().BoolVarP(&flags.verbose, "verbose", "v", flags.verbose, "Verbose mode (logged to stderr)")
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
-	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered dynamic resources")
-	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
+	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered as dynamic resources")
+	rootCmd.Flags().StringVarP(&flags.clusterLabelSelector, "cluster-selector", "l", flags.clusterLabelSelector, "Label selector for checked resources (is used for all apis)")
+	rootCmd.Flags().StringVarP(&flags.gitopsLabelSelector, "gitops-selector", "", flags.gitopsLabelSelector, "Label selector for gitops helm releases and kustomizations")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
 
-	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
-	err := rootCmd.RegisterFlagCompletionFunc("context", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return contextsCompletionFunc(kubeconfigArgs, toComplete)
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	loadingRules.ExplicitPath = flags.kubeconfig
+
+	gitopsOverrides := &clientcmd.ConfigOverrides{ClusterDefaults: clientcmd.ClusterDefaults}
+	gitopsOverrideFlags := clientcmd.RecommendedConfigOverrideFlags("gitops-")
+	// shortname -n leads to duplicate
+	gitopsOverrideFlags.ContextOverrideFlags.Namespace = clientcmd.FlagInfo{LongName: "gitops-" + clientcmd.FlagNamespace, Description: "If present, the namespace scope for this CLI request"}
+	clientcmd.BindOverrideFlags(gitopsOverrides, rootCmd.PersistentFlags(), gitopsOverrideFlags)
+	gitopsKubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, gitopsOverrides)
+
+	clusterOverrides := &clientcmd.ConfigOverrides{ClusterDefaults: clientcmd.ClusterDefaults}
+	clusterOverrideFlags := clientcmd.RecommendedConfigOverrideFlags("cluster-")
+	clientcmd.BindOverrideFlags(clusterOverrides, rootCmd.PersistentFlags(), clusterOverrideFlags)
+	clusterKubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, clusterOverrides)
+
+	err := rootCmd.RegisterFlagCompletionFunc("cluster-context", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return contextsCompletionFunc(clusterKubeConfig, toComplete)
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	rootCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		err := run(gitopsKubeConfig, clusterKubeConfig, stderrLogger{
+			stderr:  os.Stderr,
+			verbose: flags.verbose,
+		}, flags, printFlags)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	return &rootCmd, nil
 }
 
-func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) error {
+func run(gitopsKubeConfig, clusterKubeConfig clientcmd.ClientConfig, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) error {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 		return nil
 	}
 
 	// default processing
-	gitopsClient, err := getSimpleClient(kubeconfigArgs)
+	gitopsClient, err := getSimpleClient(gitopsKubeConfig)
 	if err != nil {
 		return err
 	}
 
-	clusterSimpleClient, err := getSimpleClient(kubeconfigArgs)
+	clusterSimpleClient, err := getSimpleClient(clusterKubeConfig)
 	if err != nil {
 		return err
 	}
 
-	clusterDiscoveryClient, err := getDiscoveryClient(kubeconfigArgs)
+	clusterDiscoveryClient, err := getDiscoveryClient(clusterKubeConfig)
 	if err != nil {
 		return err
 	}
 
-	zombies, err := detectZombies(logger, flags, gitopsClient, clusterSimpleClient, clusterDiscoveryClient)
+	gitopsNamespace, isSet, err := gitopsKubeConfig.Namespace()
+	if err != nil {
+		return err
+	}
+	if gitopsNamespace == "default" && !isSet {
+		gitopsNamespace = ""
+	}
+
+	clusterNamespace, isSet, err := clusterKubeConfig.Namespace()
+	if err != nil {
+		return err
+	}
+	if clusterNamespace == "default" && !isSet {
+		clusterNamespace = ""
+	}
+
+	zombies, err := detectZombies(logger, flags, gitopsClient, clusterSimpleClient, clusterDiscoveryClient, gitopsNamespace, clusterNamespace)
 	if err != nil {
 		return err
 	}
@@ -126,11 +160,11 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, fla
 	return printZombies(zombies, printFlags)
 }
 
-func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient) ([]unstructured.Unstructured, error) {
+func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsNamespace, clusterNamespace string) ([]unstructured.Unstructured, error) {
 	var zombies []unstructured.Unstructured
 
 	logger.Debugf("⎈ Helm releases ⎈")
-	helmReleases, err := getHelmReleases(gitopsClient, flags)
+	helmReleases, err := getHelmReleases(gitopsClient, gitopsNamespace, flags)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get helmreleases: %w", err)
 	}
@@ -139,7 +173,7 @@ func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleC
 	}
 
 	logger.Debugf("👷 Kustomizations 👷")
-	kustomizations, err := getKustomizations(gitopsClient, flags)
+	kustomizations, err := getKustomizations(gitopsClient, gitopsNamespace, flags)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get helmreleases: %w", err)
 	}
@@ -184,7 +218,8 @@ func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleC
 				continue
 			}
 
-			resAPI := clusterSimpleClient.Resource(*gvr)
+			resAPI := toNamespacedClient(clusterSimpleClient.Resource(*gvr), clusterNamespace)
+
 			wgProducer.Add(1)
 
 			go func() {
@@ -212,8 +247,8 @@ func detectZombies(logger stderrLogger, flags args, gitopsClient, clusterSimpleC
 	return zombies, nil
 }
 
-func getSimpleClient(kubeconfigArgs *genericclioptions.ConfigFlags) (dynamic.Interface, error) {
-	cfg, err := kubeconfigArgs.ToRESTConfig()
+func getSimpleClient(kubeconfig clientcmd.ClientConfig) (dynamic.Interface, error) {
+	cfg, err := kubeconfig.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +261,8 @@ func getSimpleClient(kubeconfigArgs *genericclioptions.ConfigFlags) (dynamic.Int
 	return client, nil
 }
 
-func getDiscoveryClient(kubeconfigArgs *genericclioptions.ConfigFlags) (*discovery.DiscoveryClient, error) {
-	cfg, err := kubeconfigArgs.ToRESTConfig()
+func getDiscoveryClient(kubeconfig clientcmd.ClientConfig) (*discovery.DiscoveryClient, error) {
+	cfg, err := kubeconfig.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -240,12 +275,14 @@ func getDiscoveryClient(kubeconfigArgs *genericclioptions.ConfigFlags) (*discove
 	return client, nil
 }
 
-func getHelmReleases(gitopsClient dynamic.Interface, flags args) ([]unstructured.Unstructured, error) {
-	helmReleases, err := listResources(context.TODO(), gitopsClient.Resource(schema.GroupVersionResource{
+func getHelmReleases(gitopsClient dynamic.Interface, namespace string, flags args) ([]unstructured.Unstructured, error) {
+	client := toNamespacedClient(gitopsClient.Resource(schema.GroupVersionResource{
 		Group:    "helm.toolkit.fluxcd.io",
 		Version:  "v2beta1",
 		Resource: "helmreleases",
-	}), flags)
+	}), namespace)
+
+	helmReleases, err := listResources(context.TODO(), client, getGitopsLabelSelector(flags))
 	if err != nil {
 		return nil, err
 	}
@@ -253,12 +290,14 @@ func getHelmReleases(gitopsClient dynamic.Interface, flags args) ([]unstructured
 	return helmReleases, nil
 }
 
-func getKustomizations(gitopsClient dynamic.Interface, flags args) ([]unstructured.Unstructured, error) {
-	kustomizations, err := listResources(context.TODO(), gitopsClient.Resource(schema.GroupVersionResource{
+func getKustomizations(gitopsClient dynamic.Interface, namespace string, flags args) ([]unstructured.Unstructured, error) {
+	client := toNamespacedClient(gitopsClient.Resource(schema.GroupVersionResource{
 		Group:    "kustomize.toolkit.fluxcd.io",
 		Version:  "v1beta2",
 		Resource: "kustomizations",
-	}), flags)
+	}), namespace)
+
+	kustomizations, err := listResources(context.TODO(), client, getGitopsLabelSelector(flags))
 	if err != nil {
 		return nil, err
 	}
@@ -266,22 +305,47 @@ func getKustomizations(gitopsClient dynamic.Interface, flags args) ([]unstructur
 	return kustomizations, nil
 }
 
-func getLabelSelector(flags args) string {
+func getGitopsLabelSelector(flags args) string {
 	selector := ""
 	if !flags.includeAll {
 		selector = defaultLabelSelector
 	}
 
-	if flags.labelSelector != "" {
-		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(flags.labelSelector, ",")...), ",")
+	if flags.gitopsLabelSelector != "" {
+		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(flags.gitopsLabelSelector, ",")...), ",")
 	}
 
 	return selector
 }
 
-func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, flags args) (items []unstructured.Unstructured, err error) {
+func toNamespacedClient(client dynamic.NamespaceableResourceInterface, namespace string) dynamic.ResourceInterface {
+	var newClient dynamic.ResourceInterface
+
+	if namespace != "" {
+		newClient = client.Namespace(namespace)
+	} else {
+		newClient = client
+	}
+
+	return newClient
+}
+
+func getResourceLabelSelector(flags args) string {
+	selector := ""
+	if !flags.includeAll {
+		selector = defaultLabelSelector
+	}
+
+	if flags.clusterLabelSelector != "" {
+		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(flags.clusterLabelSelector, ",")...), ",")
+	}
+
+	return selector
+}
+
+func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, selector string) (items []unstructured.Unstructured, err error) {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
-		LabelSelector: getLabelSelector(flags),
+		LabelSelector: selector,
 	})
 	if err != nil {
 		return items, err
@@ -324,7 +388,7 @@ func validateResource(gv schema.GroupVersion, resource metav1.APIResource, flags
 
 func handleResource(ctx context.Context, discover collector.Interface, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured, flags args) error {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
-		LabelSelector: getLabelSelector(flags),
+		LabelSelector: getResourceLabelSelector(flags),
 	})
 	if err != nil {
 		return err

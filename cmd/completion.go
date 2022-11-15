@@ -4,11 +4,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
-func contextsCompletionFunc(kubeconfigArgs *genericclioptions.ConfigFlags, toComplete string) ([]string, cobra.ShellCompDirective) {
-	rawConfig, err := kubeconfigArgs.ToRawKubeConfigLoader().RawConfig()
+func contextsCompletionFunc(kubeconfig clientcmd.ClientConfig, toComplete string) ([]string, cobra.ShellCompDirective) {
+	rawConfig, err := kubeconfig.RawConfig()
 	if err != nil {
 		return completionError(err)
 	}
