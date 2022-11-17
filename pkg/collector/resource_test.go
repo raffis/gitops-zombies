@@ -5,22 +5,20 @@ import (
 	"testing"
 
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-type NullLogger struct {
-}
+type NullLogger struct{}
 
 func (l NullLogger) Debugf(format string, a ...interface{}) {
 }
 
 func (l NullLogger) Failuref(format string, a ...interface{}) {
 }
-
-var dummyLogger = &NullLogger{}
 
 type test struct {
 	name         string
@@ -30,7 +28,9 @@ type test struct {
 }
 
 func TestDisovery(t *testing.T) {
-	var tests = []test{
+	dummyLogger := &NullLogger{}
+
+	tests := []test{
 		{
 			name: "A resource which has owner references is skipped",
 			filters: func() []FilterFunc {
@@ -124,15 +124,15 @@ func TestDisovery(t *testing.T) {
 				alsoExpected := unstructured.Unstructured{}
 				alsoExpected.SetName("service-account-secret")
 				alsoExpected.SetLabels(map[string]string{
-					FLUX_HELM_NAME_LABEL:      "release",
-					FLUX_HELM_NAMESPACE_LABEL: "not-existing",
+					fluxHelmNameLabel:      "release",
+					fluxHelmNamespaceLabel: "not-existing",
 				})
 
 				notExpected := unstructured.Unstructured{}
 				notExpected.SetName("service-account-secret")
 				notExpected.SetLabels(map[string]string{
-					FLUX_HELM_NAME_LABEL:      "release",
-					FLUX_HELM_NAMESPACE_LABEL: "test",
+					fluxHelmNameLabel:      "release",
+					fluxHelmNamespaceLabel: "test",
 				})
 
 				list.Items = append(list.Items, expected, alsoExpected, notExpected)
@@ -160,8 +160,8 @@ func TestDisovery(t *testing.T) {
 				alsoExpected := unstructured.Unstructured{}
 				alsoExpected.SetName("service-account-secret")
 				alsoExpected.SetLabels(map[string]string{
-					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
-					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "test",
+					fluxKustomizeNameLabel:      "release",
+					fluxKustomizeNamespaceLabel: "test",
 				})
 
 				list.Items = append(list.Items, expected, alsoExpected)
@@ -196,8 +196,8 @@ func TestDisovery(t *testing.T) {
 				alsoExpected := unstructured.Unstructured{}
 				alsoExpected.SetName("service-account-secret")
 				alsoExpected.SetLabels(map[string]string{
-					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
-					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "test",
+					fluxKustomizeNameLabel:      "release",
+					fluxKustomizeNamespaceLabel: "test",
 				})
 
 				notExpected := unstructured.Unstructured{}
@@ -209,8 +209,8 @@ func TestDisovery(t *testing.T) {
 				notExpected.SetNamespace("test")
 				notExpected.SetName("service-account-secret")
 				notExpected.SetLabels(map[string]string{
-					FLUX_KUSTOMIZE_NAME_LABEL:      "release",
-					FLUX_KUSTOMIZE_NAMESPACE_LABEL: "test",
+					fluxKustomizeNameLabel:      "release",
+					fluxKustomizeNamespaceLabel: "test",
 				})
 
 				list.Items = append(list.Items, expected, alsoExpected, notExpected)
@@ -224,7 +224,8 @@ func TestDisovery(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ch := make(chan unstructured.Unstructured, test.expectedPass+1)
 			discovery := NewDiscovery(dummyLogger, test.filters()...)
-			discovery.Discover(context.TODO(), test.list(), ch)
+			err := discovery.Discover(context.TODO(), test.list(), ch)
+			require.NoError(t, err)
 			assert.Equal(t, test.expectedPass, len(ch))
 		})
 	}
