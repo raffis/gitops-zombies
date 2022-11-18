@@ -23,7 +23,11 @@ fmt:
 test:
 	go test -coverprofile coverage.out -v ./...
 
-lint:
+GOLANGCI_LINT = $(GOBIN)/golangci-lint
+golangci-lint: ## Download golint locally if necessary.
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1)
+
+lint: golangci-lint
 	golangci-lint run
 
 vet:
