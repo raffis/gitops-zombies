@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -31,6 +32,7 @@ const (
 )
 
 type args struct {
+	fail          bool
 	includeAll    bool
 	labelSelector string
 	nostream      bool
@@ -39,29 +41,44 @@ type args struct {
 }
 
 const (
+	statusOK = iota
+	statusFail
+	statusZombiesDetected
+
 	defaultLabelSelector = "kubernetes.io/bootstrapping!=rbac-defaults,kube-aggregator.kubernetes.io/automanaged!=onstart,kube-aggregator.kubernetes.io/automanaged!=true"
+	statusAnnotation     = "status"
 )
 
 func main() {
+	flags := args{}
+
 	defaultLogger := stderrLogger{
 		stderr: os.Stderr,
 	}
-	rootCmd, err := parseCliArgs()
+	rootCmd, err := parseCliArgs(&flags)
 	if err != nil {
 		defaultLogger.Failuref("%v", err)
-		os.Exit(1)
 	}
 
 	err = rootCmd.Execute()
 	if err != nil {
 		defaultLogger.Failuref("%v", err)
-		os.Exit(1)
 	}
+
+	os.Exit(toExitCode(rootCmd.Annotations[statusAnnotation]))
 }
 
-func parseCliArgs() (*cobra.Command, error) {
+func toExitCode(codeStr string) int {
+	code, err := strconv.Atoi(codeStr)
+	if err != nil {
+		return statusFail
+	}
+
+	return code
+}
+
+func parseCliArgs(flags *args) (*cobra.Command, error) {
 	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
-	flags := args{}
 	printFlags := k8sget.NewGetPrintFlags()
 
 	rootCmd := &cobra.Command{
@@ -71,13 +88,18 @@ func parseCliArgs() (*cobra.Command, error) {
 		Short:         "Find kubernetes resources which are not managed by GitOps",
 		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := run(kubeconfigArgs, stderrLogger{
+			cmd.Annotations = make(map[string]string)
+			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
+
+			status, err := run(kubeconfigArgs, stderrLogger{
 				stderr:  os.Stderr,
 				verbose: flags.verbose,
-			}, flags, printFlags)
+			}, *flags, printFlags)
 			if err != nil {
 				return err
 			}
+
+			cmd.Annotations[statusAnnotation] = strconv.Itoa(status)
 			return nil
 		},
 	}
@@ -98,16 +120,17 @@ func parseCliArgs() (*cobra.Command, error) {
 	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered dynamic resources")
 	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
 	rootCmd.Flags().BoolVarP(&flags.nostream, "no-stream", "", flags.nostream, "Display discovered resources at the end instead of live")
+	rootCmd.Flags().BoolVarP(&flags.fail, "fail", "", flags.fail, "Exit with an exit code > 0 if zombies are detected")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
 	return rootCmd, nil
 }
 
-func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) error {
+func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) (int, error) {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
-		return nil
+		return statusOK, nil
 	}
 
 	if !flags.verbose {
@@ -117,42 +140,45 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, fla
 	// default processing
 	gitopsDynClient, err := getDynClient(kubeconfigArgs)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
 	clusterDiscoveryClient, err := getDiscoveryClient(kubeconfigArgs)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
 	clusterDynClient, err := getDynClient(kubeconfigArgs)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
 	gitopsRestClient, err := getRestClient(kubeconfigArgs)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
 	resourceCount, zombies, err := detectZombies(logger, flags, printFlags, gitopsDynClient, clusterDynClient, clusterDiscoveryClient, gitopsRestClient, *kubeconfigArgs.Namespace)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
 	if flags.nostream {
 		err = printZombies(zombies, printFlags)
 		if err != nil {
-			return err
-		}
-		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, len(zombies))
-
-		if len(zombies) > 0 {
-			return fmt.Errorf("%d zombies found", len(zombies))
+			return statusFail, err
 		}
 	}
 
-	return nil
+	if flags.nostream && *printFlags.OutputFormat == "" {
+		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, len(zombies))
+	}
+
+	if flags.fail && len(zombies) > 0 {
+		return statusZombiesDetected, nil
+	}
+
+	return statusOK, nil
 }
 
 func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (int, []unstructured.Unstructured, error) {
