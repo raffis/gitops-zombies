@@ -12,7 +12,7 @@ endif
 
 rwildcard=$(foreach d,$(wildcard $(addsuffix *,$(1))),$(call rwildcard,$(d)/,$(2)) $(filter $(subst *,%,$(2)),$(d)))
 
-all: test build
+all: lint test build
 
 tidy:
 	go mod tidy -compat=1.19
@@ -22,6 +22,13 @@ fmt:
 
 test:
 	go test -coverprofile coverage.out -v ./...
+
+GOLANGCI_LINT = $(GOBIN)/golangci-lint
+golangci-lint: ## Download golint locally if necessary.
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1)
+
+lint: golangci-lint
+	golangci-lint run
 
 vet:
 	go vet ./...

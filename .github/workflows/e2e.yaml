@@ -23,6 +23,8 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Linting
+        run: make lint
       - name: Run tests
         run: make test
       - name: Send go coverage report
