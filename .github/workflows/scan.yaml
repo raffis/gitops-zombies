@@ -17,9 +17,9 @@ jobs:
     name: FOSSA
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 #v3
       - name: Run FOSSA scan and upload build data
-        uses: fossa-contrib/fossa-action@v1
+        uses: fossa-contrib/fossa-action@6cffaa064112e1cf9b5798c6224f9487dc1ec316 #v1.2.0
         with:
           # FOSSA Push-Only API Token
           fossa-api-key: 956b9b92c5b16eeca1467cebe104f2c3
@@ -30,12 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 #v3
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v1
+        uses: github/codeql-action/init@c3b6fce4ee2ca25bc1066aa3bf73962fda0e8898 #codeql-bundle-20221020
         with:
           languages: go
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v1
+        uses: github/codeql-action/autobuild@c3b6fce4ee2ca25bc1066aa3bf73962fda0e8898 #codeql-bundle-20221020
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v1
+        uses: github/codeql-action/analyze@c3b6fce4ee2ca25bc1066aa3bf73962fda0e8898 #codeql-bundle-20221020
