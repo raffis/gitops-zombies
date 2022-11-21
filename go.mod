@@ -8,9 +8,10 @@ require (
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	gotest.tools/v3 v3.0.3
-	k8s.io/apimachinery v0.25.3
+	k8s.io/apimachinery v0.25.4
 	k8s.io/cli-runtime v0.25.3
 	k8s.io/client-go v0.25.3
+	k8s.io/klog/v2 v2.80.1
 	k8s.io/kubectl v0.25.2
 )
 
@@ -78,7 +79,6 @@ require (
 	k8s.io/api v0.25.3 // indirect
 	k8s.io/apiextensions-apiserver v0.25.3 // indirect
 	k8s.io/component-base v0.25.3 // indirect
-	k8s.io/klog/v2 v2.80.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
 	k8s.io/utils v0.0.0-20221012122500-cfd413dd9e85 // indirect
 	sigs.k8s.io/controller-runtime v0.13.0 // indirect
