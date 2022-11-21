@@ -3,11 +3,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'image tag prefix'
-        required: true
 
 permissions:
   contents: write # needed to write releases
@@ -25,7 +20,14 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v2.1.3
         with:
-          go-version: '1.18'
+          go-version: '1.19'
+      - name: Restore Go cache
+        uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       - name: Docker Login
         uses: docker/login-action@v2
         with:
