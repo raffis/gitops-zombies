@@ -26,9 +26,7 @@ jobs:
         run: make vet
       - name: Linting
         run: make lint
-      - name: Linting
-        run: make lint
-      - name: Run tests
+      - name: Tests
         run: make test
       - name: Send go coverage report
         uses: shogo82148/actions-goveralls@31ee804b8576ae49f6dc3caa22591bc5080e7920 #v1.6.0
