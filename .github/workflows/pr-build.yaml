@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 #v3
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f #v3.3.1
         with:
           go-version: 1.19.x
       - name: Restore Go cache
-        uses: actions/cache@v1
+        uses: actions/cache@9b0c1fce7a93df8e3bb8926b0d6e9d89e92f20a7 #v3.0.11
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -31,7 +31,7 @@ jobs:
       - name: Run tests
         run: make test
       - name: Send go coverage report
-        uses: shogo82148/actions-goveralls@v1
+        uses: shogo82148/actions-goveralls@31ee804b8576ae49f6dc3caa22591bc5080e7920 #v1.6.0
         with:
           path-to-profile: coverage.out
       - name: Check if working tree is dirty
