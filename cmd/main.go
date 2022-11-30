@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -36,7 +38,6 @@ type args struct {
 	includeAll    bool
 	labelSelector string
 	nostream      bool
-	verbose       bool
 	version       bool
 }
 
@@ -52,17 +53,14 @@ const (
 func main() {
 	flags := args{}
 
-	defaultLogger := stderrLogger{
-		stderr: os.Stderr,
-	}
 	rootCmd, err := parseCliArgs(&flags)
 	if err != nil {
-		defaultLogger.Failuref("%v", err)
+		fmt.Printf("%v", err)
 	}
 
 	err = rootCmd.Execute()
 	if err != nil {
-		defaultLogger.Failuref("%v", err)
+		fmt.Printf("%v", err)
 	}
 
 	os.Exit(toExitCode(rootCmd.Annotations[statusAnnotation]))
@@ -91,10 +89,7 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 			cmd.Annotations = make(map[string]string)
 			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
 
-			status, err := run(kubeconfigArgs, stderrLogger{
-				stderr:  os.Stderr,
-				verbose: flags.verbose,
-			}, *flags, printFlags)
+			status, err := run(kubeconfigArgs, *flags, printFlags)
 			if err != nil {
 				return err
 			}
@@ -107,6 +102,12 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	apiServer := ""
 	kubeconfigArgs.APIServer = &apiServer
 	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
+
+	rest.SetDefaultWarningHandler(rest.NewWarningWriter(io.Discard, rest.WarningWriterOptions{}))
+	set := &flag.FlagSet{}
+	klog.InitFlags(set)
+	rootCmd.PersistentFlags().AddGoFlagSet(set)
+
 	err := rootCmd.RegisterFlagCompletionFunc("context", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return contextsCompletionFunc(kubeconfigArgs, toComplete)
 	})
@@ -115,7 +116,6 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	}
 
 	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
-	rootCmd.Flags().BoolVarP(&flags.verbose, "verbose", "v", flags.verbose, "Verbose mode (Logged to stderr)")
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
 	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered dynamic resources")
 	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
@@ -127,14 +127,10 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	return rootCmd, nil
 }
 
-func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, flags args, printFlags *k8sget.PrintFlags) (int, error) {
+func run(kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *k8sget.PrintFlags) (int, error) {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 		return statusOK, nil
-	}
-
-	if !flags.verbose {
-		klog.LogToStderr(false)
 	}
 
 	// default processing
@@ -158,7 +154,7 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, fla
 		return statusFail, err
 	}
 
-	resourceCount, zombies, err := detectZombies(logger, flags, printFlags, gitopsDynClient, clusterDynClient, clusterDiscoveryClient, gitopsRestClient, *kubeconfigArgs.Namespace)
+	resourceCount, zombies, err := detectZombies(flags, printFlags, gitopsDynClient, clusterDynClient, clusterDiscoveryClient, gitopsRestClient, *kubeconfigArgs.Namespace)
 	if err != nil {
 		return statusFail, err
 	}
@@ -181,30 +177,30 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, logger stderrLogger, fla
 	return statusOK, nil
 }
 
-func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (int, []unstructured.Unstructured, error) {
+func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (int, []unstructured.Unstructured, error) {
 	var (
 		resourceCount int
 		zombies       []unstructured.Unstructured
 	)
 
-	helmReleases, kustomizations, err := listGitopsResources(logger, flags, gitopsDynClient, gitopsRestClient)
+	helmReleases, kustomizations, err := listGitopsResources(flags, gitopsDynClient, gitopsRestClient)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	logger.Debugf("discover all api groups and resources")
+	klog.V(1).Infof("discover all api groups and resources")
 	list, err := listServerGroupsAndResources(clusterDiscoveryClient)
 	if err != nil {
 		return 0, nil, err
 	}
 	for _, g := range list {
-		logger.Debugf("found group %v with the following resources: ", g.GroupVersion)
+		klog.V(1).Infof("found group %v with the following resources", g.GroupVersion)
 		for _, r := range g.APIResources {
 			var namespaceStr string
 			if r.Namespaced {
 				namespaceStr = " (namespaced)"
 			}
-			logger.Debugf(" |_ %v%v verbs: %v", r.Kind, namespaceStr, r.Verbs)
+			klog.V(1).Infof(" |_ %v%v verbs: %v", r.Kind, namespaceStr, r.Verbs)
 		}
 	}
 
@@ -212,7 +208,7 @@ func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlag
 	var wgProducer, wgConsumer sync.WaitGroup
 
 	discover := collector.NewDiscovery(
-		logger,
+		klog.NewKlogr(),
 		collector.IgnoreOwnedResource(),
 		collector.IgnoreServiceAccountSecret(),
 		collector.IgnoreHelmSecret(),
@@ -221,18 +217,18 @@ func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlag
 	)
 
 	for _, group := range list {
-		logger.Debugf("discover resource group %#v", group.GroupVersion)
+		klog.V(1).Infof("discover resource group %#v", group.GroupVersion)
 		gv, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
 			return 0, nil, err
 		}
 
 		for _, resource := range group.APIResources {
-			logger.Debugf("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
+			klog.V(1).Infof("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
 
 			gvr, err := validateResource(namespace, gv, resource, flags)
 			if err != nil {
-				logger.Debugf(err.Error())
+				klog.V(1).Infof(err.Error())
 				continue
 			}
 
@@ -245,7 +241,7 @@ func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlag
 
 				count, err := handleResource(context.TODO(), discover, resAPI, ch, flags)
 				if err != nil {
-					logger.Failuref("could not handle resource: %s", err)
+					klog.Errorf("could not handle resource: %w", err)
 				}
 				resourceCount += count
 			}(resAPI)
@@ -271,23 +267,24 @@ func detectZombies(logger stderrLogger, flags args, printFlags *k8sget.PrintFlag
 	return resourceCount, zombies, nil
 }
 
-func listGitopsResources(logger stderrLogger, flags args, gitopsDynClient dynamic.Interface, gitopsRestClient *rest.RESTClient) ([]unstructured.Unstructured, []ksapi.Kustomization, error) {
-	logger.Debugf("discover all helmreleases")
+func listGitopsResources(flags args, gitopsDynClient dynamic.Interface, gitopsRestClient *rest.RESTClient) ([]unstructured.Unstructured, []ksapi.Kustomization, error) {
+	klog.V(1).Infof("discover all helmreleases")
 	helmReleases, err := listHelmReleases(context.TODO(), gitopsDynClient, flags)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get helmreleases: %w", err)
 	}
 	for _, h := range helmReleases {
-		logger.Debugf(h.GetName())
+		klog.V(1).Infof(" |_ %s.%s", h.GetName(), h.GetNamespace())
 	}
 
-	logger.Debugf("discover all kustomizations")
+	klog.V(1).Infof("discover all kustomizations")
 	kustomizations, err := listKustomizations(context.TODO(), gitopsRestClient)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get kustomizations: %w", err)
 	}
+
 	for _, k := range kustomizations {
-		logger.Debugf(k.GetName())
+		klog.V(1).Infof(" |_ %s.%s", k.GetName(), k.GetNamespace())
 	}
 
 	return helmReleases, kustomizations, nil

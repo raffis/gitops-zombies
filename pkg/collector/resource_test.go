@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 )
 
 type NullLogger struct{}
@@ -28,8 +29,6 @@ type test struct {
 }
 
 func TestDisovery(t *testing.T) {
-	dummyLogger := &NullLogger{}
-
 	tests := []test{
 		{
 			name: "A resource which has owner references is skipped",
@@ -218,12 +217,58 @@ func TestDisovery(t *testing.T) {
 			},
 			expectedPass: 2,
 		},
+		{
+			name: "A resource which is part of a kustomization but the kustomization was not found",
+			filters: func() []FilterFunc {
+				kustomizations := &ksapi.KustomizationList{}
+				ks := ksapi.Kustomization{}
+				ks.SetName("release")
+				ks.SetNamespace("test")
+				ks.Status.Inventory = &ksapi.ResourceInventory{
+					Entries: []ksapi.ResourceRef{
+						{
+							ID: "test_service-account-secret__Secret",
+						},
+					},
+				}
+
+				kustomizations.Items = append(kustomizations.Items, ks)
+
+				return []FilterFunc{IgnoreIfKustomizationFound(kustomizations.Items)}
+			},
+			list: func() *unstructured.UnstructuredList {
+				list := &unstructured.UnstructuredList{}
+				expected := unstructured.Unstructured{}
+				expected.SetName("service-account-secret")
+				expected.SetLabels(map[string]string{
+					fluxKustomizeNameLabel:      "does-not-exists",
+					fluxKustomizeNamespaceLabel: "does-not-exists",
+				})
+
+				notExpected := unstructured.Unstructured{}
+				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Secret",
+				})
+				notExpected.SetNamespace("test")
+				notExpected.SetName("service-account-secret")
+				notExpected.SetLabels(map[string]string{
+					fluxKustomizeNameLabel:      "release",
+					fluxKustomizeNamespaceLabel: "test",
+				})
+
+				list.Items = append(list.Items, expected, notExpected)
+				return list
+			},
+			expectedPass: 1,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ch := make(chan unstructured.Unstructured, test.expectedPass+1)
-			discovery := NewDiscovery(dummyLogger, test.filters()...)
+			discovery := NewDiscovery(klog.NewKlogr(), test.filters()...)
 			err := discovery.Discover(context.TODO(), test.list(), ch)
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedPass, len(ch))
