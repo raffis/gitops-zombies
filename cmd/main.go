@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -102,6 +103,7 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	kubeconfigArgs.APIServer = &apiServer
 	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
 
+	rest.SetDefaultWarningHandler(rest.NewWarningWriter(io.Discard, rest.WarningWriterOptions{}))
 	set := &flag.FlagSet{}
 	klog.InitFlags(set)
 	rootCmd.PersistentFlags().AddGoFlagSet(set)
@@ -186,19 +188,19 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 		return 0, nil, err
 	}
 
-	klog.Infof("discover all api groups and resources")
+	klog.V(1).Infof("discover all api groups and resources")
 	list, err := listServerGroupsAndResources(clusterDiscoveryClient)
 	if err != nil {
 		return 0, nil, err
 	}
 	for _, g := range list {
-		klog.Infof("found group %v with the following resources", g.GroupVersion)
+		klog.V(1).Infof("found group %v with the following resources", g.GroupVersion)
 		for _, r := range g.APIResources {
 			var namespaceStr string
 			if r.Namespaced {
 				namespaceStr = " (namespaced)"
 			}
-			klog.Infof(" |_ %v%v verbs: %v", r.Kind, namespaceStr, r.Verbs)
+			klog.V(1).Infof(" |_ %v%v verbs: %v", r.Kind, namespaceStr, r.Verbs)
 		}
 	}
 
@@ -215,18 +217,18 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 	)
 
 	for _, group := range list {
-		klog.Infof("discover resource group %#v", group.GroupVersion)
+		klog.V(1).Infof("discover resource group %#v", group.GroupVersion)
 		gv, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
 			return 0, nil, err
 		}
 
 		for _, resource := range group.APIResources {
-			klog.Infof("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
+			klog.V(1).Infof("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
 
 			gvr, err := validateResource(namespace, gv, resource, flags)
 			if err != nil {
-				klog.Infof(err.Error())
+				klog.V(1).Infof(err.Error())
 				continue
 			}
 
@@ -266,23 +268,23 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 }
 
 func listGitopsResources(flags args, gitopsDynClient dynamic.Interface, gitopsRestClient *rest.RESTClient) ([]unstructured.Unstructured, []ksapi.Kustomization, error) {
-	klog.Infof("discover all helmreleases")
+	klog.V(1).Infof("discover all helmreleases")
 	helmReleases, err := listHelmReleases(context.TODO(), gitopsDynClient, flags)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get helmreleases: %w", err)
 	}
 	for _, h := range helmReleases {
-		klog.Infof(" |_ %s.%s", h.GetName(), h.GetNamespace())
+		klog.V(1).Infof(" |_ %s.%s", h.GetName(), h.GetNamespace())
 	}
 
-	klog.Infof("discover all kustomizations")
+	klog.V(1).Infof("discover all kustomizations")
 	kustomizations, err := listKustomizations(context.TODO(), gitopsRestClient)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get kustomizations: %w", err)
 	}
 
 	for _, k := range kustomizations {
-		klog.Infof(" |_ %s.%s", k.GetName(), k.GetNamespace())
+		klog.V(1).Infof(" |_ %s.%s", k.GetName(), k.GetNamespace())
 	}
 
 	return helmReleases, kustomizations, nil
