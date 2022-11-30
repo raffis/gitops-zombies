@@ -7,7 +7,7 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.0
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
-	gotest.tools/v3 v3.0.3
+	gotest.tools/v3 v3.4.0
 	k8s.io/apimachinery v0.25.4
 	k8s.io/cli-runtime v0.25.3
 	k8s.io/client-go v0.25.4
