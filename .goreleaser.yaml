@@ -14,6 +14,8 @@ archives:
   name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
   builds:
   - cli
+  env:
+  - CGO_ENABLED=0
 
 checksum:
   name_template: 'checksums.txt'
