@@ -11,8 +11,6 @@ builds:
   env:
   - CGO_ENABLED=0
 
-checksum:
-
 archives:
 - id: cli
   name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
