@@ -4,8 +4,8 @@ go 1.19
 
 require (
 	github.com/fluxcd/kustomize-controller/api v0.31.0
-	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.1
+	github.com/spf13/cobra v1.6.1
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	gotest.tools/v3 v3.4.0
 	k8s.io/apimachinery v0.25.4
@@ -43,7 +43,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
