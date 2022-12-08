@@ -548,12 +548,22 @@ func getClusterClientsFromConfig(ctx context.Context, gitopsClient dynamic.Inter
 		return "", clusterClients{}, err
 	}
 
-	key := "value"
-	if spec.KubeConfig.SecretRef.Key != "" {
-		key = spec.KubeConfig.SecretRef.Key
+	var kubeConfig []byte
+	switch {
+	case spec.KubeConfig.SecretRef.Key != "":
+		key := spec.KubeConfig.SecretRef.Key
+		kubeConfig = secret.Data[key]
+		if kubeConfig == nil {
+			return "", clusterClients{}, fmt.Errorf("KubeConfig secret '%s' does not contain a '%s' key with a kubeconfig", spec.KubeConfig.SecretRef.Name, key)
+		}
+	case secret.Data["value"] != nil:
+		kubeConfig = secret.Data["value"]
+	case secret.Data["value.yaml"] != nil:
+		kubeConfig = secret.Data["value.yaml"]
+	default:
+		return "", clusterClients{}, fmt.Errorf("KubeConfig secret '%s' does not contain a 'value' nor 'value.yaml' key with a kubeconfig", spec.KubeConfig.SecretRef.Name)
 	}
-
-	restConfig, err := clientcmd.RESTConfigFromKubeConfig(secret.Data[key])
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeConfig)
 	if err != nil {
 		return "", clusterClients{}, err
 	}
@@ -570,7 +580,7 @@ func getClusterClientsFromConfig(ctx context.Context, gitopsClient dynamic.Inter
 		return "", clusterClients{}, err
 	}
 
-	cfg, err := clientcmd.Load(secret.Data[key])
+	cfg, err := clientcmd.Load(kubeConfig)
 	if err != nil {
 		return "", clusterClients{}, err
 	}
