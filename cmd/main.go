@@ -52,6 +52,12 @@ type clusterClients struct {
 	discovery *discovery.DiscoveryClient
 }
 
+type clusterDectectionResult struct {
+	cluster       string
+	resourceCount int
+	zombies       []unstructured.Unstructured
+}
+
 const (
 	statusOK = iota
 	statusFail
@@ -196,42 +202,47 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *
 
 func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (resourceCount int, zombies map[string][]unstructured.Unstructured, err error) {
 	zombies = make(map[string][]unstructured.Unstructured)
+	ch := make(chan clusterDectectionResult)
 
 	helmReleases, kustomizations, clustersConfigs, err := listGitopsResources(flags, gitopsDynClient, gitopsRestClient)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	ch := make(chan string)
-	var wgProducer, wgConsumer sync.WaitGroup
-
+	var wg sync.WaitGroup
 	clustersConfigs[fluxClusterName] = clusterClients{dynamic: clusterDynClient, discovery: clusterDiscoveryClient}
-
-	wgConsumer.Add(1)
-	go func() {
-		defer wgConsumer.Done()
-		for cluster := range ch {
-			clusterResourceCount, clusterZombies, err := detectZombiesOnCluster(cluster, printFlags, flags, helmReleases, kustomizations, clustersConfigs[cluster].dynamic, clustersConfigs[cluster].discovery, namespace)
-			if err != nil {
-				klog.Errorf("[%s] could not detect zombies on: %w", cluster, err)
-			}
-
-			resourceCount += clusterResourceCount
-			zombies[cluster] = clusterZombies
-		}
-	}()
 
 	for cluster := range clustersConfigs {
 		if flags.excludeCluster != nil && slices.Contains(*flags.excludeCluster, cluster) {
 			klog.Infof("[%s] excluding from zombie detection", cluster)
 			continue
 		}
-		ch <- cluster
+
+		wg.Add(1)
+		go func(cluster string) {
+			defer wg.Done()
+
+			clusterResourceCount, clusterZombies, err := detectZombiesOnCluster(cluster, printFlags, flags, helmReleases, kustomizations, clustersConfigs[cluster].dynamic, clustersConfigs[cluster].discovery, namespace)
+			if err != nil {
+				klog.Errorf("[%s] could not detect zombies on: %w", cluster, err)
+			}
+			ch <- clusterDectectionResult{
+				cluster:       cluster,
+				resourceCount: clusterResourceCount,
+				zombies:       clusterZombies,
+			}
+		}(cluster)
 	}
 
-	wgProducer.Wait()
-	close(ch)
-	wgConsumer.Wait()
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for res := range ch {
+		resourceCount += res.resourceCount
+		zombies[res.cluster] = res.zombies
+	}
 
 	return resourceCount, zombies, nil
 }
