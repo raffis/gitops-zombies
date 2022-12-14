@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"gihub.com/raffis/gitops-zombies/pkg/collector"
-	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	"github.com/raffis/gitops-zombies/pkg/collector"
+	ksapi "gitthub.com/fluxcd/kustomize-controller/api/v1beta2"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
