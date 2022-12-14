@@ -1,4 +1,4 @@
-module gihub.com/raffis/gitops-zombies
+module github.com/raffis/gitops-zombies
 
 go 1.19
 
