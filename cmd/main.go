@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -10,10 +11,12 @@ import (
 	"strings"
 	"sync"
 
+	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"github.com/raffis/gitops-zombies/pkg/collector"
 	"github.com/spf13/cobra"
 	"golang.org/x/exp/slices"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,22 +26,30 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
 )
 
 const (
-	version = "0.0.0-dev"
-	commit  = "none"
-	date    = "unknown"
+	version         = "0.0.0-dev"
+	commit          = "none"
+	date            = "unknown"
+	fluxClusterName = "self"
 )
 
 type args struct {
-	fail          bool
-	includeAll    bool
-	labelSelector string
-	nostream      bool
-	version       bool
+	excludeCluster *[]string
+	fail           bool
+	includeAll     bool
+	labelSelector  string
+	nostream       bool
+	version        bool
+}
+
+type clusterClients struct {
+	dynamic   dynamic.Interface
+	discovery *discovery.DiscoveryClient
 }
 
 const (
@@ -121,6 +132,7 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
 	rootCmd.Flags().BoolVarP(&flags.nostream, "no-stream", "", flags.nostream, "Display discovered resources at the end instead of live")
 	rootCmd.Flags().BoolVarP(&flags.fail, "fail", "", flags.fail, "Exit with an exit code > 0 if zombies are detected")
+	flags.excludeCluster = rootCmd.Flags().StringSliceP("exclude-cluster", "", nil, "Exclude cluster from zombie detection (default none)")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
@@ -154,61 +166,84 @@ func run(kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *
 		return statusFail, err
 	}
 
-	resourceCount, zombies, err := detectZombies(flags, printFlags, gitopsDynClient, clusterDynClient, clusterDiscoveryClient, gitopsRestClient, *kubeconfigArgs.Namespace)
+	resourceCount, allZombies, err := detectZombies(flags, printFlags, gitopsDynClient, clusterDynClient, clusterDiscoveryClient, gitopsRestClient, *kubeconfigArgs.Namespace)
 	if err != nil {
 		return statusFail, err
 	}
 
 	if flags.nostream {
-		err = printZombies(zombies, printFlags)
+		err = printZombies(allZombies, printFlags)
 		if err != nil {
 			return statusFail, err
 		}
 	}
 
-	if flags.nostream && *printFlags.OutputFormat == "" {
-		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, len(zombies))
+	var totalZombies int
+	for _, zombies := range allZombies {
+		totalZombies += len(zombies)
 	}
 
-	if flags.fail && len(zombies) > 0 {
+	if flags.nostream && *printFlags.OutputFormat == "" {
+		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, totalZombies)
+	}
+
+	if flags.fail && totalZombies > 0 {
 		return statusZombiesDetected, nil
 	}
 
 	return statusOK, nil
 }
 
-func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (int, []unstructured.Unstructured, error) {
+func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (resourceCount int, zombies map[string][]unstructured.Unstructured, err error) {
+	zombies = make(map[string][]unstructured.Unstructured)
+
+	helmReleases, kustomizations, clustersConfigs, err := listGitopsResources(flags, gitopsDynClient, gitopsRestClient)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	ch := make(chan string)
+	var wgProducer, wgConsumer sync.WaitGroup
+
+	clustersConfigs[fluxClusterName] = clusterClients{dynamic: clusterDynClient, discovery: clusterDiscoveryClient}
+
+	wgConsumer.Add(1)
+	go func() {
+		defer wgConsumer.Done()
+		for cluster := range ch {
+			clusterResourceCount, clusterZombies, err := detectZombiesOnCluster(cluster, printFlags, flags, helmReleases, kustomizations, clustersConfigs[cluster].dynamic, clustersConfigs[cluster].discovery, namespace)
+			if err != nil {
+				klog.Errorf("[%s] could not detect zombies on: %w", cluster, err)
+			}
+
+			resourceCount += clusterResourceCount
+			zombies[cluster] = clusterZombies
+		}
+	}()
+
+	for cluster := range clustersConfigs {
+		if flags.excludeCluster != nil && slices.Contains(*flags.excludeCluster, cluster) {
+			klog.Infof("[%s] excluding from zombie detection", cluster)
+			continue
+		}
+		ch <- cluster
+	}
+
+	wgProducer.Wait()
+	close(ch)
+	wgConsumer.Wait()
+
+	return resourceCount, zombies, nil
+}
+
+func detectZombiesOnCluster(clusterName string, printFlags *k8sget.PrintFlags, flags args, helmReleases []helmapi.HelmRelease, kustomizations []ksapi.Kustomization, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, namespace string) (int, []unstructured.Unstructured, error) {
 	var (
 		resourceCount int
 		zombies       []unstructured.Unstructured
 	)
 
-	helmReleases, kustomizations, err := listGitopsResources(flags, gitopsDynClient, gitopsRestClient)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	klog.V(1).Infof("discover all api groups and resources")
-	list, err := listServerGroupsAndResources(clusterDiscoveryClient)
-	if err != nil {
-		return 0, nil, err
-	}
-	for _, g := range list {
-		klog.V(1).Infof("found group %v with the following resources", g.GroupVersion)
-		for _, r := range g.APIResources {
-			var namespaceStr string
-			if r.Namespaced {
-				namespaceStr = " (namespaced)"
-			}
-			klog.V(1).Infof(" |_ %v%v verbs: %v", r.Kind, namespaceStr, r.Verbs)
-		}
-	}
-
-	ch := make(chan unstructured.Unstructured)
-	var wgProducer, wgConsumer sync.WaitGroup
-
 	discover := collector.NewDiscovery(
-		klog.NewKlogr(),
+		klog.NewKlogr().WithValues("cluster", clusterName),
 		collector.IgnoreOwnedResource(),
 		collector.IgnoreServiceAccountSecret(),
 		collector.IgnoreHelmSecret(),
@@ -216,19 +251,38 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 		collector.IgnoreIfKustomizationFound(kustomizations),
 	)
 
+	var list []*metav1.APIResourceList
+	klog.V(1).Infof("[%s] discover all api groups and resources", clusterName)
+	list, err := listServerGroupsAndResources(clusterDiscoveryClient)
+	if err != nil {
+		return 0, nil, err
+	}
+	for _, g := range list {
+		klog.V(1).Infof("[%s] found group %v with the following resources", clusterName, g.GroupVersion)
+		for _, r := range g.APIResources {
+			var namespaceStr string
+			if r.Namespaced {
+				namespaceStr = " (namespaced)"
+			}
+			klog.V(1).Infof("[%s] |_ %v%v verbs: %v", clusterName, r.Kind, namespaceStr, r.Verbs)
+		}
+	}
+
+	ch := make(chan unstructured.Unstructured)
+	var wgProducer, wgConsumer sync.WaitGroup
 	for _, group := range list {
-		klog.V(1).Infof("discover resource group %#v", group.GroupVersion)
+		klog.V(1).Infof("[%s] discover resource group %#v", clusterName, group.GroupVersion)
 		gv, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
 			return 0, nil, err
 		}
 
 		for _, resource := range group.APIResources {
-			klog.V(1).Infof("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
+			klog.V(1).Infof("[%s] discover resource %#v.%#v.%#v", clusterName, resource.Name, resource.Group, resource.Version)
 
 			gvr, err := validateResource(namespace, gv, resource, flags)
 			if err != nil {
-				klog.V(1).Infof(err.Error())
+				klog.V(1).Infof("[%s] %v", clusterName, err.Error())
 				continue
 			}
 
@@ -241,7 +295,7 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 
 				count, err := handleResource(context.TODO(), discover, resAPI, ch, flags)
 				if err != nil {
-					klog.Errorf("could not handle resource: %w", err)
+					klog.V(1).Infof("[%s] could not handle resource: %w", clusterName, err)
 				}
 				resourceCount += count
 			}(resAPI)
@@ -255,7 +309,7 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 			if flags.nostream {
 				zombies = append(zombies, res)
 			} else {
-				_ = printZombies([]unstructured.Unstructured{res}, printFlags)
+				_ = printZombies(map[string][]unstructured.Unstructured{clusterName: {res}}, printFlags)
 			}
 		}
 	}()
@@ -267,11 +321,11 @@ func detectZombies(flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, c
 	return resourceCount, zombies, nil
 }
 
-func listGitopsResources(flags args, gitopsDynClient dynamic.Interface, gitopsRestClient *rest.RESTClient) ([]unstructured.Unstructured, []ksapi.Kustomization, error) {
+func listGitopsResources(flags args, gitopsDynClient dynamic.Interface, gitopsRestClient *rest.RESTClient) ([]helmapi.HelmRelease, []ksapi.Kustomization, map[string]clusterClients, error) {
 	klog.V(1).Infof("discover all helmreleases")
 	helmReleases, err := listHelmReleases(context.TODO(), gitopsDynClient, flags)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get helmreleases: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get helmreleases: %w", err)
 	}
 	for _, h := range helmReleases {
 		klog.V(1).Infof(" |_ %s.%s", h.GetName(), h.GetNamespace())
@@ -280,14 +334,24 @@ func listGitopsResources(flags args, gitopsDynClient dynamic.Interface, gitopsRe
 	klog.V(1).Infof("discover all kustomizations")
 	kustomizations, err := listKustomizations(context.TODO(), gitopsRestClient)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get kustomizations: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to get kustomizations: %w", err)
 	}
 
 	for _, k := range kustomizations {
 		klog.V(1).Infof(" |_ %s.%s", k.GetName(), k.GetNamespace())
 	}
 
-	return helmReleases, kustomizations, nil
+	klog.V(1).Infof("discover all managed clustersClients")
+	clustersClients, err := getClustersClientsFromKustomizationsAndHelmReleases(context.TODO(), gitopsDynClient, kustomizations, helmReleases)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get managed clustersClients: %w", err)
+	}
+
+	for clusterName := range clustersClients {
+		klog.V(1).Infof(" |_ %s", clusterName)
+	}
+
+	return helmReleases, kustomizations, clustersClients, nil
 }
 
 func getDiscoveryClient(kubeconfigArgs *genericclioptions.ConfigFlags) (*discovery.DiscoveryClient, error) {
@@ -364,8 +428,9 @@ func listServerGroupsAndResources(clusterDiscoveryClient *discovery.DiscoveryCli
 	return list, err
 }
 
-func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, flags args) ([]unstructured.Unstructured, error) {
-	helmReleases, err := listResources(ctx,
+func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, flags args) ([]helmapi.HelmRelease, error) {
+	helmReleases := []helmapi.HelmRelease{}
+	list, err := listResources(ctx,
 		gitopsClient.Resource(schema.GroupVersionResource{
 			Group:    "helm.toolkit.fluxcd.io",
 			Version:  "v2beta1",
@@ -373,6 +438,15 @@ func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, flags
 		}), flags)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, element := range list {
+		c := helmapi.HelmRelease{}
+		err = runtime.DefaultUnstructuredConverter.FromUnstructured(element.UnstructuredContent(), &c)
+		if err != nil {
+			return nil, err
+		}
+		helmReleases = append(helmReleases, c)
 	}
 
 	return helmReleases, nil
@@ -392,6 +466,116 @@ func listKustomizations(ctx context.Context, client *rest.RESTClient) ([]ksapi.K
 	}
 
 	return ks.Items, err
+}
+
+func getClustersClientsFromKustomizationsAndHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, kustomizations []ksapi.Kustomization, helmReleases []helmapi.HelmRelease) (map[string]clusterClients, error) {
+	resourcesWithSecrets := map[string]*unstructured.Unstructured{}
+	clients := make(map[string]clusterClients)
+
+	for _, ks := range kustomizations {
+		ks := ks
+		if ks.Spec.KubeConfig != nil {
+			key := fmt.Sprintf("%s/%s", ks.Namespace, ks.Spec.KubeConfig.SecretRef.Name)
+			if _, ok := resourcesWithSecrets[key]; !ok {
+				ksu, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ks)
+				if err != nil {
+					return nil, err
+				}
+				resourcesWithSecrets[key] = &unstructured.Unstructured{Object: ksu}
+			}
+		}
+	}
+
+	for _, hr := range helmReleases {
+		hr := hr
+		if hr.Spec.KubeConfig != nil {
+			key := fmt.Sprintf("%s/%s", hr.Namespace, hr.Spec.KubeConfig.SecretRef.Name)
+			if _, ok := resourcesWithSecrets[key]; !ok {
+				hru, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&hr)
+				if err != nil {
+					return nil, err
+				}
+				resourcesWithSecrets[key] = &unstructured.Unstructured{Object: hru}
+			}
+		}
+	}
+
+	for _, r := range resourcesWithSecrets {
+		clusterName, clusterClts, err := getClusterClientsFromConfig(ctx, gitopsClient, r.GetNamespace(), r.Object["spec"])
+		if err != nil {
+			return nil, err
+		}
+
+		clients[clusterName] = clusterClts
+	}
+
+	return clients, nil
+}
+
+func loadKubeconfigSecret(ctx context.Context, gitopsClient dynamic.Interface, namespace, name string) (*v1.Secret, error) {
+	var secret v1.Secret
+	element, err := gitopsClient.Resource(schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "secrets",
+	}).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(element.UnstructuredContent(), &secret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &secret, nil
+}
+
+func getClusterClientsFromConfig(ctx context.Context, gitopsClient dynamic.Interface, namespace string, specStr interface{}) (string, clusterClients, error) {
+	spec := ksapi.KustomizationSpec{}
+	b, err := json.Marshal(specStr)
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	err = json.Unmarshal(b, &spec)
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	secret, err := loadKubeconfigSecret(ctx, gitopsClient, namespace, spec.KubeConfig.SecretRef.Name)
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	key := "value"
+	if spec.KubeConfig.SecretRef.Key != "" {
+		key = spec.KubeConfig.SecretRef.Key
+	}
+
+	restConfig, err := clientcmd.RESTConfigFromKubeConfig(secret.Data[key])
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	dynClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	restConfig.WarningHandler = rest.NoWarnings{}
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	cfg, err := clientcmd.Load(secret.Data[key])
+	if err != nil {
+		return "", clusterClients{}, err
+	}
+
+	return cfg.Contexts[cfg.CurrentContext].Cluster, clusterClients{dynamic: dynClient, discovery: discoveryClient}, nil
 }
 
 func validateResource(ns string, gv schema.GroupVersion, resource metav1.APIResource, flags args) (*schema.GroupVersionResource, error) {
@@ -444,20 +628,22 @@ func handleResource(ctx context.Context, discover collector.Interface, resAPI dy
 	return len(list.Items), discover.Discover(ctx, list, ch)
 }
 
-func printZombies(zombies []unstructured.Unstructured, printFlags *k8sget.PrintFlags) error {
+func printZombies(allZombies map[string][]unstructured.Unstructured, printFlags *k8sget.PrintFlags) error {
 	p, err := printFlags.ToPrinter()
 	if err != nil {
 		return err
 	}
 
-	for _, zombie := range zombies {
-		if *printFlags.OutputFormat == "" {
-			ok := zombie.GetObjectKind().GroupVersionKind()
-			fmt.Printf("%s: %s.%s\n", ok.String(), zombie.GetName(), zombie.GetNamespace())
-		} else {
-			z := zombie
-			if err := p.PrintObj(&z, os.Stdout); err != nil {
-				return err
+	for clusterName, zombies := range allZombies {
+		for _, zombie := range zombies {
+			if *printFlags.OutputFormat == "" {
+				ok := zombie.GetObjectKind().GroupVersionKind()
+				fmt.Printf("[%s] %s: %s.%s\n", clusterName, ok.String(), zombie.GetName(), zombie.GetNamespace())
+			} else {
+				z := zombie
+				if err := p.PrintObj(&z, os.Stdout); err != nil {
+					return err
+				}
 			}
 		}
 	}
