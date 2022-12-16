@@ -5,20 +5,20 @@
 class GitopsZombies < Formula
   desc "Identify kubernetes resources which are not managed by GitOps"
   homepage "https://github.com/raffis/gitops-zombies"
-  version "0.0.6"
+  version "0.0.7"
 
   on_macos do
-    if Hardware::CPU.intel?
-      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.6/gitops-zombies_0.0.6_darwin_amd64.tar.gz"
-      sha256 "d174716f7bbec520d9bd44bedaff85af2dee076f2b2b98b6455fec37d906000c"
+    if Hardware::CPU.arm?
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.7/gitops-zombies_0.0.7_darwin_arm64.tar.gz"
+      sha256 "4571fba760125f8986a98e9a09eed4f2001850ecb4561a7473540b88b9d82f0a"
 
       def install
         bin.install "gitops-zombies"
       end
     end
-    if Hardware::CPU.arm?
-      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.6/gitops-zombies_0.0.6_darwin_arm64.tar.gz"
-      sha256 "51316f301f90295e42582594b4e9f2261a7335554843c320f954b9bd9ab9372c"
+    if Hardware::CPU.intel?
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.7/gitops-zombies_0.0.7_darwin_amd64.tar.gz"
+      sha256 "2efe18ba3f51b4ffa8606f1cbb06847f22fc965a71734fc03b5fb5494a340339"
 
       def install
         bin.install "gitops-zombies"
@@ -28,16 +28,16 @@ class GitopsZombies < Formula
 
   on_linux do
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.6/gitops-zombies_0.0.6_linux_arm64.tar.gz"
-      sha256 "99e42386b604ed2490ffd95225307b319fe9196ae22875060344ad59bec5a21c"
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.7/gitops-zombies_0.0.7_linux_arm64.tar.gz"
+      sha256 "0aeed1ccc9053944c2e6b95584478c2610514768791ff0a53b9be0cd88747e81"
 
       def install
         bin.install "gitops-zombies"
       end
     end
     if Hardware::CPU.intel?
-      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.6/gitops-zombies_0.0.6_linux_amd64.tar.gz"
-      sha256 "ccaee07260823868817e799b0f871b01f5c0c3820e43faa4ae66101706a8570b"
+      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.7/gitops-zombies_0.0.7_linux_amd64.tar.gz"
+      sha256 "a43a48634b4632780bb98ad670b1fdde133c58c938ea009b6088705299b7aaed"
 
       def install
         bin.install "gitops-zombies"
