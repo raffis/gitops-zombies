@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
@@ -28,7 +29,7 @@ type test struct {
 	expectedPass int
 }
 
-func TestDisovery(t *testing.T) {
+func TestDiscovery(t *testing.T) {
 	tests := []test{
 		{
 			name: "A resource which has owner references is skipped",
@@ -106,14 +107,14 @@ func TestDisovery(t *testing.T) {
 		{
 			name: "A resource which is part of a helmrelease is ignored",
 			filters: func() []FilterFunc {
-				helmReleases := &unstructured.UnstructuredList{}
-				hr := unstructured.Unstructured{}
+				helmReleases := []helmapi.HelmRelease{}
+				hr := helmapi.HelmRelease{}
 				hr.SetName("release")
 				hr.SetNamespace("test")
 
-				helmReleases.Items = append(helmReleases.Items, hr)
+				helmReleases = append(helmReleases, hr)
 
-				return []FilterFunc{IgnoreIfHelmReleaseFound(helmReleases.Items)}
+				return []FilterFunc{IgnoreIfHelmReleaseFound(helmReleases)}
 			},
 			list: func() *unstructured.UnstructuredList {
 				list := &unstructured.UnstructuredList{}

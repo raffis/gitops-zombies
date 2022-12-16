@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -59,7 +60,7 @@ RESOURCES:
 func IgnoreOwnedResource() FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		if refs := res.GetOwnerReferences(); len(refs) > 0 {
-			klog.V(1).Info("ignore resource owned by parent", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
+			logger.V(1).Info("ignore resource owned by parent", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
 			return true
 		}
 
@@ -94,7 +95,7 @@ func IgnoreHelmSecret() FilterFunc {
 }
 
 // IgnoreIfHelmReleaseFound returns a FilterFunc which filters resources part of an helm release.
-func IgnoreIfHelmReleaseFound(helmReleases []unstructured.Unstructured) FilterFunc {
+func IgnoreIfHelmReleaseFound(helmReleases []helmapi.HelmRelease) FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		labels := res.GetLabels()
 		if helmName, ok := labels[fluxHelmNameLabel]; ok {
@@ -103,7 +104,7 @@ func IgnoreIfHelmReleaseFound(helmReleases []unstructured.Unstructured) FilterFu
 					return true
 				}
 
-				klog.V(1).Info("helmrelease not found from resource", "helmReleaseName", helmName, "helmReleaseNamespace", helmNamespace, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
+				logger.V(1).Info("helmrelease not found from resource", "helmReleaseName", helmName, "helmReleaseNamespace", helmNamespace, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
 			}
 		}
 
@@ -123,7 +124,7 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 
 		if ks := findKustomization(kustomizations, ksName, ksNamespace); ks != nil {
 			id := fmt.Sprintf("%s_%s_%s_%s", res.GetNamespace(), res.GetName(), res.GroupVersionKind().Group, res.GroupVersionKind().Kind)
-			klog.V(1).Info("lookup kustomization inventory", "kustomizationName", ksName, "kustomizationNamespace", ksNamespace, "resourceId", id)
+			logger.V(1).Info("lookup kustomization inventory", "kustomizationName", ksName, "kustomizationNamespace", ksNamespace, "resourceId", id)
 
 			if ks.Status.Inventory != nil {
 				for _, entry := range ks.Status.Inventory.Entries {
@@ -133,15 +134,15 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 				}
 			}
 
-			klog.V(1).Info("resource is not part of the kustomization inventory", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
+			logger.V(1).Info("resource is not part of the kustomization inventory", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
 			return false
 		}
-		klog.V(1).Info("kustomization not found from resource", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
+		logger.V(1).Info("kustomization not found from resource", "resource", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
 		return false
 	}
 }
 
-func hasResource(pool []unstructured.Unstructured, name, namespace string) bool {
+func hasResource(pool []helmapi.HelmRelease, name, namespace string) bool {
 	for _, res := range pool {
 		if res.GetName() == name && res.GetNamespace() == namespace {
 			return true
