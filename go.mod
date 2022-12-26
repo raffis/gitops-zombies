@@ -3,7 +3,7 @@ module github.com/raffis/gitops-zombies
 go 1.19
 
 require (
-	github.com/fluxcd/helm-controller/api v0.27.0
+	github.com/fluxcd/helm-controller/api v0.28.1
 	github.com/fluxcd/kustomize-controller/api v0.31.0
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.1
