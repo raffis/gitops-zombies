@@ -40,6 +40,24 @@ A more advanced call might include a filter like the following to exclude certai
 gitops-zombies --context staging -l app.kubernetes.io/managed-by!=kops,app.kubernetes.io/name!=velero,io.cilium.k8s.policy.cluster!=default
 ```
 
+Also you might want to exclude some specific resources based on their names. It can be achieved through YAML configuration:
+```yaml
+exclusions:
+- name: default
+  description: exclude default service account
+  kind:
+    group: ""
+    kind: ServiceAccount
+    Version: v1
+- name: velero-capi-backup-.*
+  namespace: velero
+  description: exclude velero backups objects
+  kind:
+    group: velero.io
+    kind: Backup
+    Version: v1
+```
+
 ## CLI reference
 
 ```
@@ -59,7 +77,10 @@ Flags:
       --client-certificate string        Path to a client certificate file for TLS
       --client-key string                Path to a client key file for TLS
       --cluster string                   The name of the kubeconfig cluster to use
+      --config string                    Config file (default "~/.gitops-zombies.yaml")
       --context string                   The name of the kubeconfig context to use
+      --disable-compression              If true, opt-out of response compression for all requests to the server
+      --exclude-cluster strings          Exclude cluster from zombie detection (default none)
       --fail                             Exit with an exit code > 0 if zombies are detected
   -h, --help                             help for gitops-zombies
   -a, --include-all                      Includes resources which are considered dynamic resources

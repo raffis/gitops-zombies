@@ -93,3 +93,6 @@ issues:
     - path: .main.go
       linters:
         - forbidigo
+    - path: .resource_test.go
+      linters:
+        - maintidx

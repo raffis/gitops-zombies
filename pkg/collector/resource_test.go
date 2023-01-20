@@ -22,6 +22,11 @@ func (l NullLogger) Debugf(format string, a ...interface{}) {
 func (l NullLogger) Failuref(format string, a ...interface{}) {
 }
 
+func strPtr(str string) *string {
+	s := str
+	return &s
+}
+
 type test struct {
 	name         string
 	filters      func() []FilterFunc
@@ -260,6 +265,65 @@ func TestDiscovery(t *testing.T) {
 				})
 
 				list.Items = append(list.Items, expected, notExpected)
+				return list
+			},
+			expectedPass: 1,
+		},
+		{
+			name: "Resources are excluded from conf",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]Exclusion{
+					{
+						Name:        strPtr("default"),
+						Description: strPtr("exclude default service account"),
+						Kind: &schema.GroupVersionKind{
+							Group:   "",
+							Version: "v1",
+							Kind:    "ServiceAccount",
+						},
+					},
+					{
+						Name:        strPtr("velero-capi-backup-.*"),
+						Namespace:   strPtr("velero"),
+						Description: strPtr("velero"),
+						Kind: &schema.GroupVersionKind{
+							Group:   "velero.io",
+							Version: "v1",
+							Kind:    "Backup",
+						},
+					},
+				})}
+			},
+			list: func() *unstructured.UnstructuredList {
+				list := &unstructured.UnstructuredList{}
+				expected := unstructured.Unstructured{}
+				expected.SetName("default")
+				expected.SetNamespace("default")
+				expected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "ServiceAccount",
+				})
+
+				alsoExpected := unstructured.Unstructured{}
+				alsoExpected.SetName("velero-capi-backup-20230119201916")
+				alsoExpected.SetNamespace("velero")
+				alsoExpected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "velero.io",
+					Version: "v1",
+					Kind:    "Backup",
+				})
+
+				notExpected := unstructured.Unstructured{}
+				notExpected.SetName("Deployment")
+				notExpected.SetNamespace("default")
+				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "Deployment",
+				})
+
+				list.Items = append(list.Items, expected, alsoExpected, notExpected)
 				return list
 			},
 			expectedPass: 1,
