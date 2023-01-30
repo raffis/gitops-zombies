@@ -35,6 +35,41 @@ type test struct {
 	expectedPass int
 }
 
+func getExclusionListResourceSet() *unstructured.UnstructuredList {
+	list := &unstructured.UnstructuredList{}
+
+	res1 := unstructured.Unstructured{}
+	res1.SetName("velero-capi-backup-1")
+	res1.SetNamespace("velero")
+	res1.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v1",
+		Kind:    "Backup",
+	})
+
+	res2 := unstructured.Unstructured{}
+	res2.SetName("velero-capi-backup-2")
+	res2.SetNamespace("velero")
+	res2.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v2",
+		Kind:    "Backup",
+	})
+
+	res3 := unstructured.Unstructured{}
+	res3.SetName("velero-capi-backup-3")
+	res3.SetNamespace("velero2")
+	res3.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v1",
+		Kind:    "Backuped",
+	})
+
+	list.Items = append(list.Items, res1, res2, res3)
+
+	return list
+}
+
 func TestDiscovery(t *testing.T) {
 	tests := []test{
 		{
@@ -271,74 +306,85 @@ func TestDiscovery(t *testing.T) {
 			expectedPass: 1,
 		},
 		{
-			name: "Resources are excluded from conf",
+			name: "Resources excluded from conf: match all",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by apiVersion",
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
 					{
-						Description: strPtr("exclude default service account"),
-						Name:        strPtr("default"),
-						TypeMeta: v1.TypeMeta{
-							Kind:       "ServiceAccount",
-							APIVersion: "v1",
-						},
-					},
-					{
-						Name:        strPtr("velero-capi-backup-.*"),
-						Namespace:   strPtr("velero"),
-						Description: strPtr("velero"),
-						TypeMeta: v1.TypeMeta{
-							Kind:       "Backup",
-							APIVersion: "velero.io/v1",
-						},
-					},
-					{
-						Name:        strPtr("daemonset"),
-						Description: strPtr("all daemonsets"),
-						TypeMeta:    v1.TypeMeta{},
+						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1"},
 					},
 				})}
 			},
-			list: func() *unstructured.UnstructuredList {
-				list := &unstructured.UnstructuredList{}
-				expected := unstructured.Unstructured{}
-				expected.SetName("default")
-				expected.SetNamespace("default")
-				expected.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "",
-					Version: "v1",
-					Kind:    "ServiceAccount",
-				})
-
-				alsoExpected := unstructured.Unstructured{}
-				alsoExpected.SetName("velero-capi-backup-20230119201916")
-				alsoExpected.SetNamespace("velero")
-				alsoExpected.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "velero.io",
-					Version: "v1",
-					Kind:    "Backup",
-				})
-
-				anotherExpected := unstructured.Unstructured{}
-				anotherExpected.SetName("daemonset")
-				anotherExpected.SetNamespace("default")
-				anotherExpected.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "apps",
-					Version: "v1",
-					Kind:    "DaemonSet",
-				})
-
-				notExpected := unstructured.Unstructured{}
-				notExpected.SetName("deployment")
-				notExpected.SetNamespace("default")
-				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "apps",
-					Version: "v1",
-					Kind:    "Deployment",
-				})
-
-				list.Items = append(list.Items, expected, alsoExpected, anotherExpected, notExpected)
-				return list
+			list:         getExclusionListResourceSet,
+			expectedPass: 1,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by apiVersion and kind",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{
+						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1", Kind: "Backup"},
+					},
+				})}
 			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by namespace",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{
+						Namespace: strPtr("velero"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 1,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by namespace (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{
+						Namespace: strPtr("v.*"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by name",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{
+						Name: strPtr("velero-capi-backup-1"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by name (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+					{
+						Name: strPtr("velero-capi-backup-(1|2)"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
 			expectedPass: 1,
 		},
 	}

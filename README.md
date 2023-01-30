@@ -42,20 +42,20 @@ gitops-zombies --context staging -l app.kubernetes.io/managed-by!=kops,app.kuber
 
 Also you might want to exclude some specific resources based on their names. It can be achieved through YAML configuration:
 ```yaml
-exclusions:
-- name: default
-  description: exclude default service account
-  kind:
-    group: ""
-    kind: ServiceAccount
-    Version: v1
-- name: velero-capi-backup-.*
-  namespace: velero
-  description: exclude velero backups objects
-  kind:
-    group: velero.io
-    kind: Backup
-    Version: v1
+---
+apiVersion: gitopszombies/v1
+kind: Config
+metadata:
+  name: main
+spec:
+  exclusions:
+    - name: default
+      apiVersion: v1
+      kind: ServiceAccount
+    - name: velero-capi-backup-.*
+      namespace: velero
+      apiVersion: velero.io/v1
+      kind: Backup
 ```
 
 ## CLI reference

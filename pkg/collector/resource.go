@@ -148,38 +148,65 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 func IgnoreRuleExclusions(exclusions []v1.Exclusion) FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		for _, exclusion := range exclusions {
-			if exclusion.APIVersion != "" && res.GetAPIVersion() != exclusion.APIVersion {
+			if !resourceMatchesGetAPIVersionAndKind(res, exclusion.APIVersion, exclusion.Kind) {
 				continue
 			}
 
-			if exclusion.Kind != "" && res.GetKind() != exclusion.Kind {
+			if !resourceMatchesNamespace(res, exclusion.Namespace) {
 				continue
 			}
 
-			if exclusion.Namespace != nil {
-				match, err := regexp.MatchString(`^`+*exclusion.Namespace+`$`, res.GetNamespace())
-				if err != nil {
-					klog.Error(err)
-				}
-
-				if !match {
-					continue
-				}
-			}
-
-			if exclusion.Name != nil {
-				match, err := regexp.MatchString(`^`+*exclusion.Name+`$`, res.GetName())
-				if err != nil {
-					klog.Error(err)
-				}
-				if match {
-					logger.V(1).Info("resource is excluded", "exclusion", exclusion.Description, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
-					return true
-				}
+			if resourceMatchesName(res, exclusion.Name) {
+				return true
 			}
 		}
 		return false
 	}
+}
+
+func resourceMatchesGetAPIVersionAndKind(res unstructured.Unstructured, apiVersion, kind string) bool {
+	// match all api versions
+	resVer := res.GetAPIVersion()
+	if apiVersion != "" && resVer != apiVersion {
+		return false
+	}
+
+	if kind != "" && res.GetKind() != kind {
+		return false
+	}
+
+	return true
+}
+
+func resourceMatchesNamespace(res unstructured.Unstructured, namespace *string) bool {
+	if namespace != nil {
+		match, err := regexp.MatchString(`^`+*namespace+`$`, res.GetNamespace())
+		if err != nil {
+			klog.Error(err)
+		}
+		if !match {
+			return false
+		}
+	}
+
+	return true
+}
+
+func resourceMatchesName(res unstructured.Unstructured, name *string) bool {
+	if name != nil {
+		match, err := regexp.MatchString(`^`+*name+`$`, res.GetName())
+		if err != nil {
+			klog.Error(err)
+		}
+
+		if match {
+			return true
+		}
+
+		return false
+	}
+
+	return true
 }
 
 func hasResource(pool []helmapi.HelmRelease, name, namespace string) bool {

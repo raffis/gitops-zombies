@@ -8,7 +8,8 @@ import (
 // +genclient:nonNamespaced
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// Exclusion defines an exclusion.
+
+// Config defines a config for gitops-zombies.
 type Config struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
@@ -24,14 +25,14 @@ type ConfigSpec struct {
 
 // Exclusion configures an ingress class.
 type Exclusion struct {
-	Description     *string `json:"description,omitempty"`
 	Name            *string `json:"name,omitempty"`
 	Namespace       *string `json:"namespace,omitempty"`
 	metav1.TypeMeta `json:",inline"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// ConfigList defines a list of exclusions.
+
+// ConfigList defines a list of configs.
 type ConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
