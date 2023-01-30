@@ -7,8 +7,8 @@ import (
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	v1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 )
 
@@ -18,14 +18,6 @@ const (
 	fluxKustomizeNameLabel      = "kustomize.toolkit.fluxcd.io/name"
 	fluxKustomizeNamespaceLabel = "kustomize.toolkit.fluxcd.io/namespace"
 )
-
-// Exclusion is an exclusion rule.
-type Exclusion struct {
-	Description *string                  `yaml:"name,omitempty"`
-	Name        *string                  `yaml:"name,omitempty"`
-	Namespace   *string                  `yaml:"namespace,omitempty"`
-	Kind        *schema.GroupVersionKind `yaml:"kind,omitempty"`
-}
 
 // FilterFunc is a function that filters resources.
 type FilterFunc func(res unstructured.Unstructured, logger klog.Logger) bool
@@ -153,10 +145,14 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 }
 
 // IgnoreRuleExclusions returns a FilterFunc which excludes resources part of configuration exclusions.
-func IgnoreRuleExclusions(exclusions []Exclusion) FilterFunc {
+func IgnoreRuleExclusions(exclusions []v1.Exclusion) FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		for _, exclusion := range exclusions {
-			if res.GroupVersionKind() != *exclusion.Kind {
+			if exclusion.APIVersion != "" && res.GetAPIVersion() != exclusion.APIVersion {
+				continue
+			}
+
+			if exclusion.Kind != "" && res.GetKind() != exclusion.Kind {
 				continue
 			}
 
@@ -171,13 +167,15 @@ func IgnoreRuleExclusions(exclusions []Exclusion) FilterFunc {
 				}
 			}
 
-			match, err := regexp.MatchString(`^`+*exclusion.Name+`$`, res.GetName())
-			if err != nil {
-				klog.Error(err)
-			}
-			if match {
-				logger.V(1).Info("resource is excluded", "exclusion", *exclusion.Description, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
-				return true
+			if exclusion.Name != nil {
+				match, err := regexp.MatchString(`^`+*exclusion.Name+`$`, res.GetName())
+				if err != nil {
+					klog.Error(err)
+				}
+				if match {
+					logger.V(1).Info("resource is excluded", "exclusion", exclusion.Description, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
+					return true
+				}
 			}
 		}
 		return false

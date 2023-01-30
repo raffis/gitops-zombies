@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,9 +15,9 @@ import (
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/raffis/gitops-zombies/pkg/collector"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -59,11 +61,6 @@ type clusterDectectionResult struct {
 	cluster       string
 	resourceCount int
 	zombies       []unstructured.Unstructured
-}
-
-// Config is a file configuration for filters.
-type Config struct {
-	Exclusions []collector.Exclusion `yaml:"exclusions"`
 }
 
 const (
@@ -103,7 +100,6 @@ func toExitCode(codeStr string) int {
 func parseCliArgs(flags *args) (*cobra.Command, error) {
 	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
 	printFlags := k8sget.NewGetPrintFlags()
-	var conf Config
 	cfgFile := path.Join(homedir.HomeDir(), ".gitops-zombies.yaml")
 
 	rootCmd := &cobra.Command{
@@ -115,6 +111,11 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Annotations = make(map[string]string)
 			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
+
+			conf, err := loadConfig(cfgFile)
+			if err != nil {
+				return err
+			}
 
 			status, err := run(conf, kubeconfigArgs, *flags, printFlags)
 			if err != nil {
@@ -142,18 +143,6 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 		return nil, err
 	}
 
-	cobra.OnInitialize(func() {
-		conf, err = loadConfig(cfgFile)
-		if err != nil {
-			fmt.Printf("error reading config: %v\n", err)
-		}
-
-		err = validateConfig(conf)
-		if err != nil {
-			fmt.Printf("invalid config, ignoring it: %v\n", err)
-			conf = Config{}
-		}
-	})
 	rootCmd.Flags().StringVarP(&cfgFile, "config", "", cfgFile, "Config file")
 	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
@@ -168,43 +157,40 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	return rootCmd, nil
 }
 
-func loadConfig(configPath string) (conf Config, err error) {
-	viper.SetConfigFile(configPath)
-	viper.SetConfigType("yaml")
+func loadConfig(configPath string) (gitopszombiesv1.Config, error) {
+	if _, err := os.Stat(configPath); err != nil {
+		klog.V(1).Infof("Can't find config file at %s", configPath)
+		return gitopszombiesv1.Config{}, nil
+	}
 
-	viper.AutomaticEnv()
-
-	err = viper.ReadInConfig()
+	json, err := os.ReadFile(configPath)
 	if err != nil {
-		return
+		return gitopszombiesv1.Config{}, err
 	}
 
-	err = viper.Unmarshal(&conf)
-	return
-}
-
-func validateConfig(conf Config) error {
-	for i, exclusion := range conf.Exclusions {
-		if exclusion.Description == nil {
-			return fmt.Errorf("description must not be empty for exlusion rule %d", i)
-		}
-		if exclusion.Name == nil {
-			return fmt.Errorf("name must not be empty for exlusion rule %d", i)
-		}
-		if exclusion.Kind == nil {
-			return fmt.Errorf("kind must not be empty for exlusion rule %d", i)
-		}
-		if exclusion.Kind.Version == "" {
-			return fmt.Errorf("kind.version must not be empty for exlusion rule %d", i)
-		}
-		if exclusion.Kind.Kind == "" {
-			return fmt.Errorf("kind.kind must not be empty for exlusion rule %d", i)
-		}
+	err = gitopszombiesv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		return gitopszombiesv1.Config{}, err
 	}
-	return nil
+
+	obj, err := runtime.Decode(scheme.Codecs.UniversalDeserializer(), json)
+	if err != nil {
+		return gitopszombiesv1.Config{}, err
+	}
+
+	var cfg gitopszombiesv1.Config
+	switch o := obj.(type) {
+	case *gitopszombiesv1.Config:
+		cfg = *o
+	default:
+		err = errors.New("unsupported config")
+		return gitopszombiesv1.Config{}, err
+	}
+
+	return cfg, nil
 }
 
-func run(conf Config, kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *k8sget.PrintFlags) (int, error) {
+func run(conf gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *k8sget.PrintFlags) (int, error) {
 	if flags.version {
 		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 		return statusOK, nil
@@ -259,7 +245,7 @@ func run(conf Config, kubeconfigArgs *genericclioptions.ConfigFlags, flags args,
 	return statusOK, nil
 }
 
-func detectZombies(conf Config, flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (resourceCount int, zombies map[string][]unstructured.Unstructured, err error) {
+func detectZombies(conf gitopszombiesv1.Config, flags args, printFlags *k8sget.PrintFlags, gitopsDynClient, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, gitopsRestClient *rest.RESTClient, namespace string) (resourceCount int, zombies map[string][]unstructured.Unstructured, err error) {
 	zombies = make(map[string][]unstructured.Unstructured)
 	ch := make(chan clusterDectectionResult)
 
@@ -306,7 +292,7 @@ func detectZombies(conf Config, flags args, printFlags *k8sget.PrintFlags, gitop
 	return resourceCount, zombies, nil
 }
 
-func detectZombiesOnCluster(conf Config, clusterName string, printFlags *k8sget.PrintFlags, flags args, helmReleases []helmapi.HelmRelease, kustomizations []ksapi.Kustomization, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, namespace string) (int, []unstructured.Unstructured, error) {
+func detectZombiesOnCluster(conf gitopszombiesv1.Config, clusterName string, printFlags *k8sget.PrintFlags, flags args, helmReleases []helmapi.HelmRelease, kustomizations []ksapi.Kustomization, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient, namespace string) (int, []unstructured.Unstructured, error) {
 	var (
 		resourceCount int
 		zombies       []unstructured.Unstructured
@@ -319,7 +305,7 @@ func detectZombiesOnCluster(conf Config, clusterName string, printFlags *k8sget.
 		collector.IgnoreHelmSecret(),
 		collector.IgnoreIfHelmReleaseFound(helmReleases),
 		collector.IgnoreIfKustomizationFound(kustomizations),
-		collector.IgnoreRuleExclusions(conf.Exclusions),
+		collector.IgnoreRuleExclusions(conf.Spec.Exclusions),
 	)
 
 	var list []*metav1.APIResourceList

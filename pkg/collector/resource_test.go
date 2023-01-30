@@ -6,6 +6,7 @@ import (
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -272,25 +273,28 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources are excluded from conf",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
 					{
-						Name:        strPtr("default"),
 						Description: strPtr("exclude default service account"),
-						Kind: &schema.GroupVersionKind{
-							Group:   "",
-							Version: "v1",
-							Kind:    "ServiceAccount",
+						Name:        strPtr("default"),
+						TypeMeta: v1.TypeMeta{
+							Kind:       "ServiceAccount",
+							APIVersion: "v1",
 						},
 					},
 					{
 						Name:        strPtr("velero-capi-backup-.*"),
 						Namespace:   strPtr("velero"),
 						Description: strPtr("velero"),
-						Kind: &schema.GroupVersionKind{
-							Group:   "velero.io",
-							Version: "v1",
-							Kind:    "Backup",
+						TypeMeta: v1.TypeMeta{
+							Kind:       "Backup",
+							APIVersion: "velero.io/v1",
 						},
+					},
+					{
+						Name:        strPtr("daemonset"),
+						Description: strPtr("all daemonsets"),
+						TypeMeta:    v1.TypeMeta{},
 					},
 				})}
 			},
@@ -314,8 +318,17 @@ func TestDiscovery(t *testing.T) {
 					Kind:    "Backup",
 				})
 
+				anotherExpected := unstructured.Unstructured{}
+				anotherExpected.SetName("daemonset")
+				anotherExpected.SetNamespace("default")
+				anotherExpected.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "apps",
+					Version: "v1",
+					Kind:    "DaemonSet",
+				})
+
 				notExpected := unstructured.Unstructured{}
-				notExpected.SetName("Deployment")
+				notExpected.SetName("deployment")
 				notExpected.SetNamespace("default")
 				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "apps",
@@ -323,7 +336,7 @@ func TestDiscovery(t *testing.T) {
 					Kind:    "Deployment",
 				})
 
-				list.Items = append(list.Items, expected, alsoExpected, notExpected)
+				list.Items = append(list.Items, expected, alsoExpected, anotherExpected, notExpected)
 				return list
 			},
 			expectedPass: 1,
