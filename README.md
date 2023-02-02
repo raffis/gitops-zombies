@@ -47,15 +47,14 @@ apiVersion: gitopszombies/v1
 kind: Config
 metadata:
   name: main
-spec:
-  exclusions:
-    - name: default
-      apiVersion: v1
-      kind: ServiceAccount
-    - name: velero-capi-backup-.*
-      namespace: velero
-      apiVersion: velero.io/v1
-      kind: Backup
+exclusions:
+- name: default
+  apiVersion: v1
+  kind: ServiceAccount
+- name: velero-capi-backup-.*
+  namespace: velero
+  apiVersion: velero.io/v1
+  kind: Backup
 ```
 
 ## CLI reference

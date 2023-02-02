@@ -199,11 +199,7 @@ func resourceMatchesName(res unstructured.Unstructured, name *string) bool {
 			klog.Error(err)
 		}
 
-		if match {
-			return true
-		}
-
-		return false
+		return match
 	}
 
 	return true

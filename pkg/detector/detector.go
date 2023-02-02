@@ -179,7 +179,7 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 		collector.IgnoreHelmSecret(),
 		collector.IgnoreIfHelmReleaseFound(helmReleases),
 		collector.IgnoreIfKustomizationFound(kustomizations),
-		collector.IgnoreRuleExclusions(d.conf.Spec.Exclusions),
+		collector.IgnoreRuleExclusions(d.conf.Exclusions),
 	)
 
 	var list []*metav1.APIResourceList
