@@ -308,8 +308,32 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match all",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by cluster",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
+					{
+						Cluster: strPtr("test"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by cluster (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
+					{
+						Cluster: strPtr("t.*"),
+					},
 				})}
 			},
 			list:         getExclusionListResourceSet,
@@ -318,7 +342,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by apiVersion",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1"},
 					},
@@ -330,7 +354,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by apiVersion and kind",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1", Kind: "Backup"},
 					},
@@ -342,7 +366,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by namespace",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						Namespace: strPtr("velero"),
 					},
@@ -354,7 +378,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by namespace (regexp)",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						Namespace: strPtr("v.*"),
 					},
@@ -366,7 +390,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by name",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						Name: strPtr("velero-capi-backup-1"),
 					},
@@ -378,7 +402,7 @@ func TestDiscovery(t *testing.T) {
 		{
 			name: "Resources excluded from conf: match restricted by name (regexp)",
 			filters: func() []FilterFunc {
-				return []FilterFunc{IgnoreRuleExclusions([]gitopszombiesv1.Exclusion{
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.Exclusion{
 					{
 						Name: strPtr("velero-capi-backup-(1|2)"),
 					},

@@ -17,6 +17,7 @@ type Config struct {
 
 // Exclusion configures an ingress class.
 type Exclusion struct {
+	Cluster         *string `json:"cluster,omitempty"`
 	Name            *string `json:"name,omitempty"`
 	Namespace       *string `json:"namespace,omitempty"`
 	metav1.TypeMeta `json:",inline"`
