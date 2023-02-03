@@ -45,8 +45,6 @@ Also you might want to exclude some specific resources based on their names. It 
 ---
 apiVersion: gitopszombies/v1
 kind: Config
-metadata:
-  name: main
 exclusions:
 - name: default
   apiVersion: v1
@@ -55,6 +53,7 @@ exclusions:
   namespace: velero
   apiVersion: velero.io/v1
   kind: Backup
+  cluster: management
 ```
 
 ## CLI reference
