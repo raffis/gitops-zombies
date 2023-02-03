@@ -11,12 +11,12 @@ import (
 
 // Config defines a config for gitops-zombies.
 type Config struct {
-	metav1.TypeMeta `json:",inline"`
-	Exclusions      []Exclusion `json:"exclusions,omitempty"`
+	metav1.TypeMeta  `json:",inline"`
+	ExcludeResources []ExcludeResources `json:"excludeResources,omitempty"`
 }
 
-// Exclusion configures an ingress class.
-type Exclusion struct {
+// ExcludeResources configures filters to exclude resources from zombies list.
+type ExcludeResources struct {
 	Cluster         *string `json:"cluster,omitempty"`
 	Name            *string `json:"name,omitempty"`
 	Namespace       *string `json:"namespace,omitempty"`

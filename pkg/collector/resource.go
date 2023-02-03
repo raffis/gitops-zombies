@@ -145,7 +145,7 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 }
 
 // IgnoreRuleExclusions returns a FilterFunc which excludes resources part of configuration exclusions.
-func IgnoreRuleExclusions(cluster string, exclusions []v1.Exclusion) FilterFunc {
+func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		for _, exclusion := range exclusions {
 			if !matchesCluster(cluster, exclusion.Cluster) {

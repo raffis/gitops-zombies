@@ -45,7 +45,7 @@ Also you might want to exclude some specific resources based on their names. It 
 ---
 apiVersion: gitopszombies/v1
 kind: Config
-exclusions:
+excludeResources:
 - name: default
   apiVersion: v1
   kind: ServiceAccount
