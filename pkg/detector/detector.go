@@ -40,29 +40,19 @@ type clusterClients struct {
 	discovery *discovery.DiscoveryClient
 }
 
-// Args owns arguments for a new Dectector.
-type Args struct {
-	ExcludeCluster *[]string
-	Fail           bool
-	IncludeAll     bool
-	LabelSelector  string
-	Nostream       bool
-	PrintFlags     *k8sget.PrintFlags
-}
-
 // Detector owns detector materials.
 type Detector struct {
-	kubeconfigArgs         *genericclioptions.ConfigFlags
 	gitopsDynClient        dynamic.Interface
 	clusterDiscoveryClient *discovery.DiscoveryClient
 	clusterDynClient       dynamic.Interface
 	gitopsRestClient       *rest.RESTClient
+	kubeconfigArgs         *genericclioptions.ConfigFlags
+	printFlags             *k8sget.PrintFlags
 	conf                   *gitopszombiesv1.Config
-	flags                  Args
 }
 
 // New creates a new detection object.
-func New(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, flags Args) (*Detector, error) {
+func New(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, printFlags *k8sget.PrintFlags) (*Detector, error) {
 	gitopsDynClient, err := getDynClient(kubeconfigArgs)
 	if err != nil {
 		return nil, err
@@ -84,13 +74,13 @@ func New(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigF
 	}
 
 	return &Detector{
-		kubeconfigArgs:         kubeconfigArgs,
 		gitopsDynClient:        gitopsDynClient,
 		clusterDiscoveryClient: clusterDiscoveryClient,
 		clusterDynClient:       clusterDynClient,
 		gitopsRestClient:       gitopsRestClient,
-		flags:                  flags,
 		conf:                   conf,
+		kubeconfigArgs:         kubeconfigArgs,
+		printFlags:             printFlags,
 	}, nil
 }
 
@@ -108,7 +98,7 @@ func (d *Detector) DetectZombies() (resourceCount int, zombies map[string][]unst
 	clustersConfigs[fluxClusterName] = clusterClients{dynamic: d.clusterDynClient, discovery: d.clusterDiscoveryClient}
 
 	for cluster := range clustersConfigs {
-		if d.flags.ExcludeCluster != nil && slices.Contains(*d.flags.ExcludeCluster, cluster) {
+		if d.conf.ExcludeClusters != nil && slices.Contains(*d.conf.ExcludeClusters, cluster) {
 			klog.Infof("[%s] excluding from zombie detection", cluster)
 			continue
 		}
@@ -144,14 +134,14 @@ func (d *Detector) DetectZombies() (resourceCount int, zombies map[string][]unst
 
 // PrintZombies prints all workload not managed by gitops.
 func (d *Detector) PrintZombies(allZombies map[string][]unstructured.Unstructured) error {
-	p, err := d.flags.PrintFlags.ToPrinter()
+	p, err := d.printFlags.ToPrinter()
 	if err != nil {
 		return err
 	}
 
 	for clusterName, zombies := range allZombies {
 		for _, zombie := range zombies {
-			if *d.flags.PrintFlags.OutputFormat == "" {
+			if *d.printFlags.OutputFormat == "" {
 				ok := zombie.GetObjectKind().GroupVersionKind()
 				fmt.Printf("[%s] %s: %s.%s\n", clusterName, ok.String(), zombie.GetName(), zombie.GetNamespace())
 			} else {
@@ -237,7 +227,7 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 	go func() {
 		defer wgConsumer.Done()
 		for res := range ch {
-			if d.flags.Nostream {
+			if d.conf.NoStream != nil && *d.conf.NoStream {
 				zombies = append(zombies, res)
 			} else {
 				_ = d.PrintZombies(map[string][]unstructured.Unstructured{clusterName: {res}})
@@ -331,12 +321,12 @@ func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(ctx conte
 
 func (d *Detector) getLabelSelector() string {
 	selector := ""
-	if !d.flags.IncludeAll {
+	if d.conf.IncludeAll == nil || !*d.conf.IncludeAll {
 		selector = defaultLabelSelector
 	}
 
-	if d.flags.LabelSelector != "" {
-		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(d.flags.LabelSelector, ",")...), ",")
+	if d.conf.LabelSelector != nil {
+		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(*d.conf.LabelSelector, ",")...), ",")
 	}
 
 	return selector
@@ -353,7 +343,7 @@ func (d *Detector) validateResource(ns string, gv schema.GroupVersion, resource 
 		Resource: resource.Name,
 	}
 
-	if !d.flags.IncludeAll {
+	if d.conf.IncludeAll == nil || !*d.conf.IncludeAll {
 		for _, listed := range getBlacklist() {
 			if listed == gvr {
 				return nil, fmt.Errorf("skipping blacklisted api resource %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)

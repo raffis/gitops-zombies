@@ -29,12 +29,41 @@ import (
 func (in *Config) DeepCopyInto(out *Config) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
+	if in.ExcludeClusters != nil {
+		in, out := &in.ExcludeClusters, &out.ExcludeClusters
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	if in.ExcludeResources != nil {
 		in, out := &in.ExcludeResources, &out.ExcludeResources
 		*out = make([]ExcludeResources, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.Fail != nil {
+		in, out := &in.Fail, &out.Fail
+		*out = new(bool)
+		**out = **in
+	}
+	if in.IncludeAll != nil {
+		in, out := &in.IncludeAll, &out.IncludeAll
+		*out = new(bool)
+		**out = **in
+	}
+	if in.LabelSelector != nil {
+		in, out := &in.LabelSelector, &out.LabelSelector
+		*out = new(string)
+		**out = **in
+	}
+	if in.NoStream != nil {
+		in, out := &in.NoStream, &out.NoStream
+		*out = new(bool)
+		**out = **in
 	}
 	return
 }
