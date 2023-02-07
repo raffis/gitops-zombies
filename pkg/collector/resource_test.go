@@ -6,6 +6,7 @@ import (
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,11 +23,51 @@ func (l NullLogger) Debugf(format string, a ...interface{}) {
 func (l NullLogger) Failuref(format string, a ...interface{}) {
 }
 
+func strPtr(str string) *string {
+	s := str
+	return &s
+}
+
 type test struct {
 	name         string
 	filters      func() []FilterFunc
 	list         func() *unstructured.UnstructuredList
 	expectedPass int
+}
+
+func getExclusionListResourceSet() *unstructured.UnstructuredList {
+	list := &unstructured.UnstructuredList{}
+
+	res1 := unstructured.Unstructured{}
+	res1.SetName("velero-capi-backup-1")
+	res1.SetNamespace("velero")
+	res1.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v1",
+		Kind:    "Backup",
+	})
+
+	res2 := unstructured.Unstructured{}
+	res2.SetName("velero-capi-backup-2")
+	res2.SetNamespace("velero")
+	res2.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v2",
+		Kind:    "Backup",
+	})
+
+	res3 := unstructured.Unstructured{}
+	res3.SetName("velero-capi-backup-3")
+	res3.SetNamespace("velero2")
+	res3.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "velero.io",
+		Version: "v1",
+		Kind:    "Backuped",
+	})
+
+	list.Items = append(list.Items, res1, res2, res3)
+
+	return list
 }
 
 func TestDiscovery(t *testing.T) {
@@ -262,6 +303,112 @@ func TestDiscovery(t *testing.T) {
 				list.Items = append(list.Items, expected, notExpected)
 				return list
 			},
+			expectedPass: 1,
+		},
+		{
+			name: "Resources excluded from conf: match all",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by cluster",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Cluster: strPtr("test"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by cluster (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Cluster: strPtr("t.*"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by apiVersion",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 1,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by apiVersion and kind",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						TypeMeta: v1.TypeMeta{APIVersion: "velero.io/v1", Kind: "Backup"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by namespace",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Namespace: strPtr("velero"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 1,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by namespace (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Namespace: strPtr("v.*"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by name",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Name: strPtr("velero-capi-backup-1"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by name (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Name: strPtr("velero-capi-backup-(1|2)"),
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
 			expectedPass: 1,
 		},
 	}

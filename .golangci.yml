@@ -90,6 +90,15 @@ issues:
     - 'G204: Subprocess launched with variable'
     - 'G304: Potential file inclusion via variable'
   exclude-rules:
-    - path: .main.go
+    - path: cmd/main.go
+      linters:
+        - nilerr
+    - path: (cmd/main.go|pkg/detector/detector.go)
       linters:
         - forbidigo
+    - path: .resource_test.go
+      linters:
+        - maintidx
+    - path: pkg/apis/gitopszombies/v1/register.go
+      linters:
+        - gochecknoglobals

@@ -3,9 +3,11 @@ package collector
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	v1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 )
@@ -140,6 +142,84 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 		logger.V(1).Info("kustomization not found from resource", "resource", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
 		return false
 	}
+}
+
+// IgnoreRuleExclusions returns a FilterFunc which excludes resources part of configuration exclusions.
+func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) FilterFunc {
+	return func(res unstructured.Unstructured, logger klog.Logger) bool {
+		for _, exclusion := range exclusions {
+			if !matchesCluster(cluster, exclusion.Cluster) {
+				continue
+			}
+
+			if !resourceMatchesGetAPIVersionAndKind(res, exclusion.APIVersion, exclusion.Kind) {
+				continue
+			}
+
+			if !resourceMatchesNamespace(res, exclusion.Namespace) {
+				continue
+			}
+
+			if resourceMatchesName(res, exclusion.Name) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func matchesCluster(cluster string, clusterExclude *string) bool {
+	if clusterExclude != nil {
+		match, err := regexp.MatchString(`^`+*clusterExclude+`$`, cluster)
+		if err != nil {
+			klog.Error(err)
+		}
+
+		return match
+	}
+
+	return true
+}
+
+func resourceMatchesGetAPIVersionAndKind(res unstructured.Unstructured, apiVersion, kind string) bool {
+	// match all api versions
+	resVer := res.GetAPIVersion()
+	if apiVersion != "" && resVer != apiVersion {
+		return false
+	}
+
+	if kind != "" && res.GetKind() != kind {
+		return false
+	}
+
+	return true
+}
+
+func resourceMatchesNamespace(res unstructured.Unstructured, namespace *string) bool {
+	if namespace != nil {
+		match, err := regexp.MatchString(`^`+*namespace+`$`, res.GetNamespace())
+		if err != nil {
+			klog.Error(err)
+		}
+		if !match {
+			return false
+		}
+	}
+
+	return true
+}
+
+func resourceMatchesName(res unstructured.Unstructured, name *string) bool {
+	if name != nil {
+		match, err := regexp.MatchString(`^`+*name+`$`, res.GetName())
+		if err != nil {
+			klog.Error(err)
+		}
+
+		return match
+	}
+
+	return true
 }
 
 func hasResource(pool []helmapi.HelmRelease, name, namespace string) bool {

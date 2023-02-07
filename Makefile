@@ -33,6 +33,9 @@ lint: golangci-lint
 vet:
 	go vet ./...
 
+code-gen:
+	./hack/code-gen.sh
+
 build:
 	CGO_ENABLED=0 go build -ldflags="-s -w -X main.VERSION=$(VERSION)" -o ./bin/gitops-zombies ./cmd
 

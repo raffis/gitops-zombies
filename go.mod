@@ -10,7 +10,7 @@ require (
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	gotest.tools/v3 v3.4.0
 	k8s.io/api v0.26.0
-	k8s.io/apimachinery v0.26.0
+	k8s.io/apimachinery v0.26.1
 	k8s.io/cli-runtime v0.26.0
 	k8s.io/client-go v0.26.0
 	k8s.io/klog/v2 v2.80.1
@@ -47,7 +47,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -66,12 +66,12 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
-	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
+	golang.org/x/net v0.4.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
 	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/term v0.3.0 // indirect
 	golang.org/x/text v0.5.0 // indirect
-	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
+	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
