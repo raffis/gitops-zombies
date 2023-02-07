@@ -2,7 +2,6 @@ package collector
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
@@ -10,6 +9,7 @@ import (
 	v1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/cli-utils/pkg/object"
 )
 
 const (
@@ -125,7 +125,13 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 		}
 
 		if ks := findKustomization(kustomizations, ksName, ksNamespace); ks != nil {
-			id := fmt.Sprintf("%s_%s_%s_%s", res.GetNamespace(), res.GetName(), res.GroupVersionKind().Group, res.GroupVersionKind().Kind)
+			obj := object.ObjMetadata{
+				Namespace: res.GetNamespace(),
+				Name:      res.GetName(),
+				GroupKind: res.GroupVersionKind().GroupKind(),
+			}
+			id := obj.String()
+
 			logger.V(1).Info("lookup kustomization inventory", "kustomizationName", ksName, "kustomizationNamespace", ksNamespace, "resourceId", id)
 
 			if ks.Status.Inventory != nil {

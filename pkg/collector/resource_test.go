@@ -220,7 +220,7 @@ func TestDiscovery(t *testing.T) {
 				ks.Status.Inventory = &ksapi.ResourceInventory{
 					Entries: []ksapi.ResourceRef{
 						{
-							ID: "test_service-account-secret__Secret",
+							ID: "test_cluster-role__test_rbac.authorization.k8s.io_ClusterRole",
 						},
 					},
 				}
@@ -243,12 +243,12 @@ func TestDiscovery(t *testing.T) {
 
 				notExpected := unstructured.Unstructured{}
 				notExpected.SetGroupVersionKind(schema.GroupVersionKind{
-					Group:   "",
+					Group:   "rbac.authorization.k8s.io",
 					Version: "v1",
-					Kind:    "Secret",
+					Kind:    "ClusterRole",
 				})
 				notExpected.SetNamespace("test")
-				notExpected.SetName("service-account-secret")
+				notExpected.SetName("cluster-role:test")
 				notExpected.SetLabels(map[string]string{
 					fluxKustomizeNameLabel:      "release",
 					fluxKustomizeNamespaceLabel: "test",
