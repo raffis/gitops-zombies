@@ -166,6 +166,14 @@ func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) Filt
 				continue
 			}
 
+			if !resourceMatchesAnnotations(res, exclusion.Annotations) {
+				continue
+			}
+
+			if !resourceMatchesLabels(res, exclusion.Labels) {
+				continue
+			}
+
 			if resourceMatchesName(res, exclusion.Name) {
 				return true
 			}
@@ -209,6 +217,52 @@ func resourceMatchesNamespace(res unstructured.Unstructured, namespace *string) 
 		}
 		if !match {
 			return false
+		}
+	}
+
+	return true
+}
+
+func resourceMatchesAnnotations(res unstructured.Unstructured, annotations map[string]string) bool {
+	if annotations != nil {
+		resAnnotations := res.GetAnnotations()
+
+		for key, val := range annotations {
+			v, ok := resAnnotations[key]
+			if !ok {
+				return false
+			}
+
+			match, err := regexp.MatchString(`^`+val+`$`, v)
+			if err != nil {
+				klog.Error(err)
+			}
+			if !match {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func resourceMatchesLabels(res unstructured.Unstructured, labels map[string]string) bool {
+	if labels != nil {
+		resLabels := res.GetLabels()
+
+		for key, val := range labels {
+			v, ok := resLabels[key]
+			if !ok {
+				return false
+			}
+
+			match, err := regexp.MatchString(`^`+val+`$`, v)
+			if err != nil {
+				klog.Error(err)
+			}
+			if !match {
+				return false
+			}
 		}
 	}
 

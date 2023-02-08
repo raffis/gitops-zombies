@@ -17,8 +17,10 @@ type Config struct {
 
 // ExcludeResources configures filters to exclude resources from zombies list.
 type ExcludeResources struct {
-	Cluster         *string `json:"cluster,omitempty"`
-	Name            *string `json:"name,omitempty"`
-	Namespace       *string `json:"namespace,omitempty"`
+	Cluster         *string           `json:"cluster,omitempty"`
+	Annotations     map[string]string `json:"annotations,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+	Name            *string           `json:"name,omitempty"`
+	Namespace       *string           `json:"namespace,omitempty"`
 	metav1.TypeMeta `json:",inline"`
 }
