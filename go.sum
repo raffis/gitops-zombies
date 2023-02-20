@@ -42,8 +42,8 @@ github.com/evanphx/json-patch v5.6.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLi
 github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d h1:105gxyaGwCFad8crR9dcMQWvV9Hvulu6hwUh4tWPJnM=
 github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d/go.mod h1:ZZMPRZwes7CROmyNKgQzC3XPs6L/G2EJLHddWejkmf4=
 github.com/flowstack/go-jsonschema v0.1.1/go.mod h1:yL7fNggx1o8rm9RlgXv7hTBWxdBM0rVwpMwimd3F3N0=
-github.com/fluxcd/helm-controller/api v0.29.0 h1:aoyI2fQNR/8rmUCz6l4kqQzgS3oAvP3/K6qP/uKk2C0=
-github.com/fluxcd/helm-controller/api v0.29.0/go.mod h1:BXivPOvBtSKRmcs2HdAtlR5hlC0UGU5Zg847KmtXvkQ=
+github.com/fluxcd/helm-controller/api v0.30.0 h1:zunzaHGak5IThITRncqOsWqyvdoO6lDd5sP98ryTIcs=
+github.com/fluxcd/helm-controller/api v0.30.0/go.mod h1:EfT8NQAybkDbfmqQlb1JoMtwEKudaQcHSsWQpWRdhGE=
 github.com/fluxcd/kustomize-controller/api v0.33.0 h1:ELTDIBC9dYaQjwIOtQxXAX2S4ydD6VQbmgf9p8wxIpE=
 github.com/fluxcd/kustomize-controller/api v0.33.0/go.mod h1:6dVUIhT3Dge4Fyljv/qILYygwUTpAXl5IDjoOFLebfE=
 github.com/fluxcd/pkg/apis/kustomize v0.8.0 h1:A6aLolxPV2Sll44SOHiX96lbXXmRZmS5BoEerkRHrfM=
@@ -342,8 +342,8 @@ k8s.io/utils v0.0.0-20221128185143-99ec85e7a448 h1:KTgPnR10d5zhztWptI952TNtt/4u5
 k8s.io/utils v0.0.0-20221128185143-99ec85e7a448/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cli-utils v0.34.0 h1:zCUitt54f0/MYj/ajVFnG6XSXMhpZ72O/3RewIchW8w=
 sigs.k8s.io/cli-utils v0.34.0/go.mod h1:EXyMwPMu9OL+LRnj0JEMsGG/fRvbgFadcVlSnE8RhFs=
-sigs.k8s.io/controller-runtime v0.14.2 h1:P6IwDhbsRWsBClt/8/h8Zy36bCuGuW5Op7MHpFrN/60=
-sigs.k8s.io/controller-runtime v0.14.2/go.mod h1:WqIdsAY6JBsjfc/CqO0CORmNtoCtE4S6qbPc9s68h+0=
+sigs.k8s.io/controller-runtime v0.14.4 h1:Kd/Qgx5pd2XUL08eOV2vwIq3L9GhIbJ5Nxengbd4/0M=
+sigs.k8s.io/controller-runtime v0.14.4/go.mod h1:WqIdsAY6JBsjfc/CqO0CORmNtoCtE4S6qbPc9s68h+0=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/kustomize/api v0.12.1 h1:7YM7gW3kYBwtKvoY216ZzY+8hM+lV53LUayghNRJ0vM=
