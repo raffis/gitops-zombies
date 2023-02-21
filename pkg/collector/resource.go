@@ -166,11 +166,11 @@ func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) Filt
 				continue
 			}
 
-			if !resourceMatchesAnnotations(res, exclusion.Annotations) {
+			if !resourceMatchesMetadata(res.GetAnnotations(), exclusion.Annotations) {
 				continue
 			}
 
-			if !resourceMatchesLabels(res, exclusion.Labels) {
+			if !resourceMatchesMetadata(res.GetLabels(), exclusion.Labels) {
 				continue
 			}
 
@@ -223,46 +223,19 @@ func resourceMatchesNamespace(res unstructured.Unstructured, namespace *string) 
 	return true
 }
 
-func resourceMatchesAnnotations(res unstructured.Unstructured, annotations map[string]string) bool {
-	if annotations != nil {
-		resAnnotations := res.GetAnnotations()
-
-		for key, val := range annotations {
-			v, ok := resAnnotations[key]
-			if !ok {
-				return false
-			}
-
-			match, err := regexp.MatchString(`^`+val+`$`, v)
-			if err != nil {
-				klog.Error(err)
-			}
-			if !match {
-				return false
-			}
+func resourceMatchesMetadata(resMetadata, metadata map[string]string) bool {
+	for key, val := range metadata {
+		v, ok := resMetadata[key]
+		if !ok {
+			return false
 		}
-	}
 
-	return true
-}
-
-func resourceMatchesLabels(res unstructured.Unstructured, labels map[string]string) bool {
-	if labels != nil {
-		resLabels := res.GetLabels()
-
-		for key, val := range labels {
-			v, ok := resLabels[key]
-			if !ok {
-				return false
-			}
-
-			match, err := regexp.MatchString(`^`+val+`$`, v)
-			if err != nil {
-				klog.Error(err)
-			}
-			if !match {
-				return false
-			}
+		match, err := regexp.MatchString(`^`+val+`$`, v)
+		if err != nil {
+			klog.Error(err)
+		}
+		if !match {
+			return false
 		}
 	}
 
