@@ -182,9 +182,9 @@ func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) Filt
 	}
 }
 
-func matchesCluster(cluster string, clusterExclude *string) bool {
-	if clusterExclude != nil {
-		match, err := regexp.MatchString(`^`+*clusterExclude+`$`, cluster)
+func matchesCluster(cluster, clusterExclude string) bool {
+	if clusterExclude != "" {
+		match, err := regexp.MatchString(`^`+clusterExclude+`$`, cluster)
 		if err != nil {
 			klog.Error(err)
 		}
@@ -209,9 +209,9 @@ func resourceMatchesGetAPIVersionAndKind(res unstructured.Unstructured, apiVersi
 	return true
 }
 
-func resourceMatchesNamespace(res unstructured.Unstructured, namespace *string) bool {
-	if namespace != nil {
-		match, err := regexp.MatchString(`^`+*namespace+`$`, res.GetNamespace())
+func resourceMatchesNamespace(res unstructured.Unstructured, namespace string) bool {
+	if namespace != "" {
+		match, err := regexp.MatchString(`^`+namespace+`$`, res.GetNamespace())
 		if err != nil {
 			klog.Error(err)
 		}
@@ -242,9 +242,9 @@ func resourceMatchesMetadata(resMetadata, metadata map[string]string) bool {
 	return true
 }
 
-func resourceMatchesName(res unstructured.Unstructured, name *string) bool {
-	if name != nil {
-		match, err := regexp.MatchString(`^`+*name+`$`, res.GetName())
+func resourceMatchesName(res unstructured.Unstructured, name string) bool {
+	if name != "" {
+		match, err := regexp.MatchString(`^`+name+`$`, res.GetName())
 		if err != nil {
 			klog.Error(err)
 		}

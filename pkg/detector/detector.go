@@ -98,7 +98,7 @@ func (d *Detector) DetectZombies() (resourceCount int, zombies map[string][]unst
 	clustersConfigs[fluxClusterName] = clusterClients{dynamic: d.clusterDynClient, discovery: d.clusterDiscoveryClient}
 
 	for cluster := range clustersConfigs {
-		if d.conf.ExcludeClusters != nil && slices.Contains(*d.conf.ExcludeClusters, cluster) {
+		if d.conf.ExcludeClusters != nil && slices.Contains(d.conf.ExcludeClusters, cluster) {
 			klog.Infof("[%s] excluding from zombie detection", cluster)
 			continue
 		}
@@ -227,7 +227,7 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 	go func() {
 		defer wgConsumer.Done()
 		for res := range ch {
-			if d.conf.NoStream != nil && *d.conf.NoStream {
+			if d.conf.NoStream {
 				zombies = append(zombies, res)
 			} else {
 				_ = d.PrintZombies(map[string][]unstructured.Unstructured{clusterName: {res}})
@@ -321,12 +321,12 @@ func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(ctx conte
 
 func (d *Detector) getLabelSelector() string {
 	selector := ""
-	if d.conf.IncludeAll == nil || !*d.conf.IncludeAll {
+	if !d.conf.IncludeAll {
 		selector = defaultLabelSelector
 	}
 
-	if d.conf.LabelSelector != nil {
-		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(*d.conf.LabelSelector, ",")...), ",")
+	if d.conf.LabelSelector != "" {
+		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(d.conf.LabelSelector, ",")...), ",")
 	}
 
 	return selector
@@ -343,7 +343,7 @@ func (d *Detector) validateResource(ns string, gv schema.GroupVersion, resource 
 		Resource: resource.Name,
 	}
 
-	if d.conf.IncludeAll == nil || !*d.conf.IncludeAll {
+	if !d.conf.IncludeAll {
 		for _, listed := range getBlacklist() {
 			if listed == gvr {
 				return nil, fmt.Errorf("skipping blacklisted api resource %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)

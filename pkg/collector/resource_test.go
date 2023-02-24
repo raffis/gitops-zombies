@@ -23,11 +23,6 @@ func (l NullLogger) Debugf(format string, a ...interface{}) {
 func (l NullLogger) Failuref(format string, a ...interface{}) {
 }
 
-func strPtr(str string) *string {
-	s := str
-	return &s
-}
-
 type test struct {
 	name         string
 	filters      func() []FilterFunc
@@ -322,7 +317,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Cluster: strPtr("test"),
+						Cluster: "test",
 					},
 				})}
 			},
@@ -334,7 +329,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Cluster: strPtr("t.*"),
+						Cluster: "t.*",
 					},
 				})}
 			},
@@ -370,7 +365,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Namespace: strPtr("velero"),
+						Namespace: "velero",
 					},
 				})}
 			},
@@ -382,7 +377,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Namespace: strPtr("v.*"),
+						Namespace: "v.*",
 					},
 				})}
 			},
@@ -442,7 +437,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Name: strPtr("velero-capi-backup-1"),
+						Name: "velero-capi-backup-1",
 					},
 				})}
 			},
@@ -454,7 +449,7 @@ func TestDiscovery(t *testing.T) {
 			filters: func() []FilterFunc {
 				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
 					{
-						Name: strPtr("velero-capi-backup-(1|2)"),
+						Name: "velero-capi-backup-(1|2)",
 					},
 				})}
 			},
