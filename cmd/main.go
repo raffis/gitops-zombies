@@ -13,6 +13,7 @@ import (
 	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/raffis/gitops-zombies/pkg/detector"
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -29,12 +30,8 @@ const (
 )
 
 type args struct {
-	excludeCluster *[]string
-	fail           bool
-	includeAll     bool
-	labelSelector  string
-	nostream       bool
-	version        bool
+	gitopszombiesv1.Config
+	version bool
 }
 
 const (
@@ -43,12 +40,16 @@ const (
 	statusZombiesDetected
 
 	statusAnnotation = "status"
+
+	flagExcludeCluster = "exclude-cluster"
+	flagFail           = "fail"
+	flagIncludeAll     = "include-all"
+	flagLabelSelector  = "selector"
+	flagNoStream       = "no-stream"
 )
 
 func main() {
-	flags := args{}
-
-	rootCmd, err := parseCliArgs(&flags)
+	rootCmd, err := parseCliArgs()
 	if err != nil {
 		fmt.Printf("%v", err)
 	}
@@ -70,7 +71,16 @@ func toExitCode(codeStr string) int {
 	return code
 }
 
-func parseCliArgs(flags *args) (*cobra.Command, error) {
+func parseCliArgs() (*cobra.Command, error) {
+	flags := args{Config: gitopszombiesv1.Config{
+		TypeMeta:         metav1.TypeMeta{},
+		ExcludeClusters:  nil,
+		ExcludeResources: nil,
+		Fail:             false,
+		IncludeAll:       false,
+		LabelSelector:    "",
+		NoStream:         false,
+	}}
 	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
 	printFlags := k8sget.NewGetPrintFlags()
 	cfgFile := path.Join(homedir.HomeDir(), ".gitops-zombies.yaml")
@@ -85,12 +95,20 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 			cmd.Annotations = make(map[string]string)
 			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
 
+			if flags.version {
+				fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
+				cmd.Annotations[statusAnnotation] = strconv.Itoa(statusOK)
+				return nil
+			}
+
 			conf, err := loadConfig(cfgFile)
 			if err != nil {
 				return err
 			}
 
-			status, err := run(conf, kubeconfigArgs, *flags, printFlags)
+			mergeConfigAndFlags(conf, flags.Config, cmd)
+
+			status, err := run(conf, kubeconfigArgs, printFlags)
 			if err != nil {
 				return err
 			}
@@ -119,11 +137,11 @@ func parseCliArgs(flags *args) (*cobra.Command, error) {
 	rootCmd.Flags().StringVarP(&cfgFile, "config", "", cfgFile, "Config file")
 	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
-	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered dynamic resources")
-	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
-	rootCmd.Flags().BoolVarP(&flags.nostream, "no-stream", "", flags.nostream, "Display discovered resources at the end instead of live")
-	rootCmd.Flags().BoolVarP(&flags.fail, "fail", "", flags.fail, "Exit with an exit code > 0 if zombies are detected")
-	flags.excludeCluster = rootCmd.Flags().StringSliceP("exclude-cluster", "", nil, "Exclude cluster from zombie detection (default none)")
+	rootCmd.Flags().BoolVarP(&flags.IncludeAll, flagIncludeAll, "a", false, "Includes resources which are considered dynamic resources")
+	rootCmd.Flags().StringVarP(&flags.LabelSelector, flagLabelSelector, "l", "", "Label selector (Is used for all apis)")
+	rootCmd.Flags().BoolVarP(&flags.NoStream, flagNoStream, "", false, "Display discovered resources at the end instead of live")
+	rootCmd.Flags().BoolVarP(&flags.Fail, flagFail, "", false, "Exit with an exit code > 0 if zombies are detected")
+	rootCmd.Flags().StringSliceVarP(&flags.ExcludeClusters, flagExcludeCluster, "", []string{}, "Exclude cluster from zombie detection (default none)")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
@@ -163,21 +181,32 @@ func loadConfig(configPath string) (*gitopszombiesv1.Config, error) {
 	return &cfg, nil
 }
 
-func run(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, flags args, printFlags *k8sget.PrintFlags) (int, error) {
-	if flags.version {
-		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
-		return statusOK, nil
+func mergeConfigAndFlags(conf *gitopszombiesv1.Config, flags gitopszombiesv1.Config, cmd *cobra.Command) {
+	// cmd line overrides config
+	if cmd.Flags().Changed(flagExcludeCluster) {
+		conf.ExcludeClusters = flags.ExcludeClusters
 	}
 
+	if cmd.Flags().Changed(flagFail) {
+		conf.Fail = flags.Fail
+	}
+
+	if cmd.Flags().Changed(flagIncludeAll) {
+		conf.IncludeAll = flags.IncludeAll
+	}
+
+	if cmd.Flags().Changed(flagLabelSelector) {
+		conf.LabelSelector = flags.LabelSelector
+	}
+
+	if cmd.Flags().Changed(flagNoStream) {
+		conf.NoStream = flags.NoStream
+	}
+}
+
+func run(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, printFlags *k8sget.PrintFlags) (int, error) {
 	// default processing
-	detect, err := detector.New(conf, kubeconfigArgs, detector.Args{
-		ExcludeCluster: flags.excludeCluster,
-		Fail:           flags.fail,
-		IncludeAll:     flags.includeAll,
-		LabelSelector:  flags.labelSelector,
-		Nostream:       flags.nostream,
-		PrintFlags:     printFlags,
-	})
+	detect, err := detector.New(conf, kubeconfigArgs, printFlags)
 	if err != nil {
 		return statusFail, err
 	}
@@ -186,7 +215,7 @@ func run(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigF
 		return statusFail, err
 	}
 
-	if flags.nostream {
+	if conf.NoStream {
 		err = detect.PrintZombies(allZombies)
 		if err != nil {
 			return statusFail, err
@@ -198,11 +227,11 @@ func run(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigF
 		totalZombies += len(zombies)
 	}
 
-	if flags.nostream && *printFlags.OutputFormat == "" {
+	if conf.NoStream && printFlags.OutputFormat != nil && *printFlags.OutputFormat == "" {
 		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, totalZombies)
 	}
 
-	if flags.fail && totalZombies > 0 {
+	if conf.Fail && totalZombies > 0 {
 		return statusZombiesDetected, nil
 	}
 
