@@ -46,6 +46,7 @@ func getExclusionListResourceSet() *unstructured.UnstructuredList {
 		Version: "v1",
 		Kind:    "Backup",
 	})
+	res1.SetAnnotations(map[string]string{"test-annotation": "velero-capi-backup-1"})
 
 	res2 := unstructured.Unstructured{}
 	res2.SetName("velero-capi-backup-2")
@@ -55,6 +56,7 @@ func getExclusionListResourceSet() *unstructured.UnstructuredList {
 		Version: "v2",
 		Kind:    "Backup",
 	})
+	res2.SetLabels(map[string]string{"test-label": "velero-capi-backup-2"})
 
 	res3 := unstructured.Unstructured{}
 	res3.SetName("velero-capi-backup-3")
@@ -386,6 +388,54 @@ func TestDiscovery(t *testing.T) {
 			},
 			list:         getExclusionListResourceSet,
 			expectedPass: 0,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by annotation",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Annotations: map[string]string{"test-annotation": "velero-capi-backup-1"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by annotation (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Annotations: map[string]string{"test-annotation": "v.*"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by label",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Labels: map[string]string{"test-label": "velero-capi-backup-2"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
+		},
+		{
+			name: "Resources excluded from conf: match restricted by label (regexp)",
+			filters: func() []FilterFunc {
+				return []FilterFunc{IgnoreRuleExclusions("test", []gitopszombiesv1.ExcludeResources{
+					{
+						Labels: map[string]string{"test-label": "v.*"},
+					},
+				})}
+			},
+			list:         getExclusionListResourceSet,
+			expectedPass: 2,
 		},
 		{
 			name: "Resources excluded from conf: match restricted by name",
