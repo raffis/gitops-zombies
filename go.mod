@@ -6,7 +6,7 @@ require (
 	github.com/fluxcd/helm-controller/api v0.30.0
 	github.com/fluxcd/kustomize-controller/api v0.34.0
 	github.com/spf13/cobra v1.6.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	golang.org/x/exp v0.0.0-20221004215720-b9f4876ce741
 	gotest.tools/v3 v3.4.0
 	k8s.io/api v0.26.1
