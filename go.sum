@@ -44,8 +44,8 @@ github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d/go.mod h1:ZZM
 github.com/flowstack/go-jsonschema v0.1.1/go.mod h1:yL7fNggx1o8rm9RlgXv7hTBWxdBM0rVwpMwimd3F3N0=
 github.com/fluxcd/helm-controller/api v0.32.0 h1:hNlkHJmF8Yaq799tvlAJe70xEjVztKieVDyjY2jVAEA=
 github.com/fluxcd/helm-controller/api v0.32.0/go.mod h1:xzQgNoaPOg77zFUqvnaX0Fn3lPA3iGDLoz8q4wiEyLA=
-github.com/fluxcd/kustomize-controller/api v0.34.0 h1:azw0y8AUfNSc1r3ZJkpbf8JKfpEs1Po980NqxuaJ8Iw=
-github.com/fluxcd/kustomize-controller/api v0.34.0/go.mod h1:3KgYtDR0oSVU/CL4nokdQEGKOWSq/jXvmRh9AQ8sRF8=
+github.com/fluxcd/kustomize-controller/api v0.35.1 h1:l7AndDJXVLZcCHmEIRXU9ksWInlP6SjFtHQH1SC7++c=
+github.com/fluxcd/kustomize-controller/api v0.35.1/go.mod h1:hrxVOUss0om4mg+ykMYtH4CgLuM2RReSPf0hG9e0b18=
 github.com/fluxcd/pkg/apis/kustomize v1.0.0 h1:5T2b/mRZiGWtP7fvSU8gZOApIc06H6SdLX3MlsE6LRo=
 github.com/fluxcd/pkg/apis/kustomize v1.0.0/go.mod h1:XaDYlKxrf9D2zZWcZ0BnSIqGtcm8mdNtJGzZWYjCnQo=
 github.com/fluxcd/pkg/apis/meta v1.0.0 h1:i9IGHd/VNEZELX7mepkiYFbJxs2J5znaB4cN9z2nPm8=
