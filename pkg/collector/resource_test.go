@@ -17,10 +17,10 @@ import (
 
 type NullLogger struct{}
 
-func (l NullLogger) Debugf(format string, a ...interface{}) {
+func (l NullLogger) Debugf(_ string, _ ...interface{}) {
 }
 
-func (l NullLogger) Failuref(format string, a ...interface{}) {
+func (l NullLogger) Failuref(_ string, _ ...interface{}) {
 }
 
 type test struct {
