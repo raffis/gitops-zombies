@@ -15,7 +15,7 @@ rwildcard=$(foreach d,$(wildcard $(addsuffix *,$(1))),$(call rwildcard,$(d)/,$(2
 all: lint test build
 
 tidy:
-	go mod tidy -compat=1.19
+	go mod tidy -compat=1.20
 
 fmt:
 	go fmt ./...
@@ -25,7 +25,7 @@ test:
 
 GOLANGCI_LINT = $(GOBIN)/golangci-lint
 golangci-lint: ## Download golint locally if necessary.
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2)
 
 lint: golangci-lint
 	golangci-lint run

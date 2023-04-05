@@ -20,6 +20,7 @@ It also acknowledges the following facts:
 * Filters secrets which are managed by other parties including helm or ServiceAccount tokens
 * Checks if the referenced HelmRelease or Kustomization exists
 * Checks if resources are still part of the kustomization inventory
+* Supports cross cluster kustomizations
 
 
 ## How do I install it?
