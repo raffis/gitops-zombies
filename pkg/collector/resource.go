@@ -41,7 +41,7 @@ func NewDiscovery(logger klog.Logger, filters ...FilterFunc) Interface {
 }
 
 // Discover validates discovered resources against all filters and adds it to consumer channel.
-func (d *discovery) Discover(ctx context.Context, list *unstructured.UnstructuredList, ch chan unstructured.Unstructured) error {
+func (d *discovery) Discover(_ context.Context, list *unstructured.UnstructuredList, ch chan unstructured.Unstructured) error {
 RESOURCES:
 	for _, res := range list.Items {
 		d.logger.V(1).Info("validate resource", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())

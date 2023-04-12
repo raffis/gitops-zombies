@@ -1,6 +1,6 @@
 module github.com/raffis/gitops-zombies
 
-go 1.19
+go 1.20
 
 require (
 	github.com/fluxcd/helm-controller/api v0.32.0
