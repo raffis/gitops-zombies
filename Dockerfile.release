@@ -1,4 +1,4 @@
-FROM alpine:3.17
+FROM alpine:3.18
 WORKDIR /
 COPY gitops-zombies /usr/bin/gitops-zombies
 USER 65532:65532
