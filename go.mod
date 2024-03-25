@@ -7,7 +7,7 @@ require (
 	github.com/fluxcd/kustomize-controller/api v0.35.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.2
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
+	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
 	gotest.tools/v3 v3.4.0
 	k8s.io/api v0.26.3
 	k8s.io/apimachinery v0.26.3
