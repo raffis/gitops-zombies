@@ -36,7 +36,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Cosign
         uses: sigstore/cosign-installer@9e9de2292db7abb3f51b7f4808d98f0d347a8919 # v3.0.2
-      - uses: anchore/sbom-action/download-syft@422cb34a0f8b599678c41b21163ea6088edb2624 # v0.14.1
+      - uses: anchore/sbom-action/download-syft@8d0a6505bf28ced3e85154d13dc6af83299e13f1 # v0.17.4
       - name: Create release and SBOM
         if: startsWith(github.ref, 'refs/tags/v')
         uses: goreleaser/goreleaser-action@v4
