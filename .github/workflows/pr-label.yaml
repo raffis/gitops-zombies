@@ -6,6 +6,6 @@ jobs:
     if: ${{ !github.event.pull_request.head.repo.fork && github.actor != 'dependabot[bot]' }}
     steps:
       - name: size-label
-        uses: "pascalgn/size-label-action@a4655c448bb838e8d73b81e97fd0831bb4cbda1e"
+        uses: "pascalgn/size-label-action@f8edde36b3be04b4f65dcfead05dc8691b374348"
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
