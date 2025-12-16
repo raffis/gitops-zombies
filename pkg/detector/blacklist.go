@@ -1,3 +1,4 @@
+// Package detector provides functionality for detecting zombie resources in Kubernetes clusters.
 package detector
 
 import (

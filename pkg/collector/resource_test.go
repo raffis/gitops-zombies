@@ -6,21 +6,22 @@ import (
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
-	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 )
 
 type NullLogger struct{}
 
-func (l NullLogger) Debugf(_ string, _ ...interface{}) {
+func (l NullLogger) Debugf(_ string, _ ...any) {
 }
 
-func (l NullLogger) Failuref(_ string, _ ...interface{}) {
+func (l NullLogger) Failuref(_ string, _ ...any) {
 }
 
 type test struct {

@@ -1,3 +1,4 @@
+// Package main provides the gitops-zombies CLI tool.
 package main
 
 import (
@@ -7,7 +8,10 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-func contextsCompletionFunc(kubeconfigArgs *genericclioptions.ConfigFlags, toComplete string) ([]string, cobra.ShellCompDirective) {
+func contextsCompletionFunc(
+	kubeconfigArgs *genericclioptions.ConfigFlags,
+	toComplete string,
+) ([]string, cobra.ShellCompDirective) {
 	rawConfig, err := kubeconfigArgs.ToRawKubeConfigLoader().RawConfig()
 	if err != nil {
 		return completionError(err)

@@ -13,7 +13,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, labelSelector string) (items []unstructured.Unstructured, err error) {
+func listResources(
+	ctx context.Context,
+	resAPI dynamic.ResourceInterface,
+	labelSelector string,
+) (items []unstructured.Unstructured, err error) {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})
@@ -24,7 +28,11 @@ func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, labelS
 	return list.Items, err
 }
 
-func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, labelSelector string) ([]helmapi.HelmRelease, error) {
+func listHelmReleases(
+	ctx context.Context,
+	gitopsClient dynamic.Interface,
+	labelSelector string,
+) ([]helmapi.HelmRelease, error) {
 	helmReleases := []helmapi.HelmRelease{}
 	list, err := listResources(ctx,
 		gitopsClient.Resource(schema.GroupVersionResource{

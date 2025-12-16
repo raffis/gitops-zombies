@@ -11,7 +11,9 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-func listServerGroupsAndResources(clusterDiscoveryClient *discovery.DiscoveryClient) ([]*metav1.APIResourceList, error) {
+func listServerGroupsAndResources(
+	clusterDiscoveryClient *discovery.DiscoveryClient,
+) ([]*metav1.APIResourceList, error) {
 	_, list, err := clusterDiscoveryClient.ServerGroupsAndResources()
 	if err != nil {
 		return nil, err
@@ -20,7 +22,11 @@ func listServerGroupsAndResources(clusterDiscoveryClient *discovery.DiscoveryCli
 	return list, err
 }
 
-func loadKubeconfigSecret(ctx context.Context, gitopsClient dynamic.Interface, namespace, name string) (*v1.Secret, error) {
+func loadKubeconfigSecret(
+	ctx context.Context,
+	gitopsClient dynamic.Interface,
+	namespace, name string,
+) (*v1.Secret, error) {
 	var secret v1.Secret
 	element, err := gitopsClient.Resource(schema.GroupVersionResource{
 		Group:    "",
