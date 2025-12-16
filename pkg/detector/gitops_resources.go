@@ -3,7 +3,7 @@ package detector
 import (
 	"context"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,7 +29,7 @@ func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, label
 	list, err := listResources(ctx,
 		gitopsClient.Resource(schema.GroupVersionResource{
 			Group:    "helm.toolkit.fluxcd.io",
-			Version:  "v2beta1",
+			Version:  "v2",
 			Resource: "helmreleases",
 		}), labelSelector)
 	if err != nil {

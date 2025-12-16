@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/stretchr/testify/require"

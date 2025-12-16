@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"github.com/raffis/gitops-zombies/pkg/collector"
@@ -109,7 +109,7 @@ func (d *Detector) DetectZombies() (resourceCount int, zombies map[string][]unst
 
 			clusterResourceCount, clusterZombies, err := d.detectZombiesOnCluster(cluster, helmReleases, kustomizations, clustersConfigs[cluster].dynamic, clustersConfigs[cluster].discovery)
 			if err != nil {
-				klog.Errorf("[%s] could not detect zombies on: %w", cluster, err)
+				klog.Errorf("[%s] could not detect zombies on: %v", cluster, err)
 			}
 			ch <- clusterDetectionResult{
 				cluster:       cluster,
@@ -216,7 +216,7 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 
 				count, err := handleResource(context.TODO(), discover, resAPI, ch, d.getLabelSelector())
 				if err != nil {
-					klog.V(1).Infof("[%s] could not handle resource: %w", clusterName, err)
+					klog.V(1).Infof("[%s] could not handle resource: %v", clusterName, err)
 				}
 				resourceCount += count
 			}(resAPI)
