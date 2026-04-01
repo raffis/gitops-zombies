@@ -1,0 +1,26 @@
+{
+  "extends": ["config:base", "github>whitesource/merge-confidence:beta", ":semanticCommitTypeAll(chore)"],
+  "prHourlyLimit": 50,
+  "prConcurrentLimit": 10, 
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+      "labels": [
+          "security"
+      ]
+  },
+  "stabilityDays": 3,
+  "packageRules": [
+    {
+      "matchPaths": ["**"],
+      "labels": ["dependencies", "{{manager}}"]
+    },
+    {
+      "semanticCommitScope": "deps-dev",
+      "matchManagers": ["github-actions"]
+    }
+  ],
+  "postUpdateOptions": [
+      "gomodUpdateImportPaths",
+      "gomodTidy"
+  ]
+}

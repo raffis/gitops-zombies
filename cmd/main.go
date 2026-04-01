@@ -1,21 +1,27 @@
 package main
 
 import (
-	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path"
+	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/homedir"
+	"k8s.io/klog/v2"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
+
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
+	"github.com/raffis/gitops-zombies/pkg/detector"
 )
 
 const (
@@ -24,229 +30,230 @@ const (
 	date    = "unknown"
 )
 
-var rootCmd = &cobra.Command{
-	Use:           "gitops-zombies",
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	Short:         "Find kubernetes resources which are not managed by GitOps",
-	Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
-	RunE:          run,
-}
+type args struct {
+	gitopszombiesv1.Config
 
-type Args struct {
-	verbose       bool
-	labelSelector string
-	includeAll    bool
-	version       bool
+	version bool
 }
 
 const (
-	FLUX_HELM_NAME_LABEL           = "helm.toolkit.fluxcd.io/name"
-	FLUX_HELM_NAMESPACE_LABEL      = "helm.toolkit.fluxcd.io/namespace"
-	FLUX_KUSTOMIZE_NAME_LABEL      = "kustomize.toolkit.fluxcd.io/name"
-	FLUX_KUSTOMIZE_NAMESPACE_LABEL = "kustomize.toolkit.fluxcd.io/namespace"
-	DEFAULT_LABEL_SELECTOR         = "kubernetes.io/bootstrapping!=rbac-defaults,kube-aggregator.kubernetes.io/automanaged!=onstart,kube-aggregator.kubernetes.io/automanaged!=true"
+	statusOK = iota
+	statusFail
+	statusZombiesDetected
 )
 
-var kubeconfigArgs = genericclioptions.NewConfigFlags(false)
-var logger = stderrLogger{stderr: os.Stderr}
+const (
+	statusAnnotation = "status"
 
-var flags Args
-var printFlags *k8sget.PrintFlags
+	flagExcludeCluster = "exclude-cluster"
+	flagFail           = "fail"
+	flagIncludeAll     = "include-all"
+	flagLabelSelector  = "selector"
+	flagNoStream       = "no-stream"
+)
 
-func init() {
-	printFlags = k8sget.NewGetPrintFlags()
+func main() {
+	rootCmd, err := parseCliArgs()
+	if err != nil {
+		fmt.Printf("%v", err)
+	}
+
+	err = rootCmd.Execute()
+	if err != nil {
+		fmt.Printf("%v", err)
+	}
+
+	os.Exit(toExitCode(rootCmd.Annotations[statusAnnotation]))
+}
+
+func toExitCode(codeStr string) int {
+	code, err := strconv.Atoi(codeStr)
+	if err != nil {
+		return statusFail
+	}
+
+	return code
+}
+
+func parseCliArgs() (*cobra.Command, error) {
+	flags := args{Config: gitopszombiesv1.Config{
+		TypeMeta:         metav1.TypeMeta{},
+		ExcludeClusters:  nil,
+		ExcludeResources: nil,
+		Fail:             false,
+		IncludeAll:       false,
+		LabelSelector:    "",
+		NoStream:         false,
+	}}
+	kubeconfigArgs := genericclioptions.NewConfigFlags(false)
+	printFlags := k8sget.NewGetPrintFlags()
+	cfgFile := path.Join(homedir.HomeDir(), ".gitops-zombies.yaml")
+
+	rootCmd := &cobra.Command{
+		Use:           "gitops-zombies",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Short:         "Find kubernetes resources which are not managed by GitOps",
+		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.Annotations = make(map[string]string)
+			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
+
+			if flags.version {
+				fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
+				cmd.Annotations[statusAnnotation] = strconv.Itoa(statusOK)
+				return nil
+			}
+
+			conf, err := loadConfig(cfgFile)
+			if err != nil {
+				return err
+			}
+
+			mergeConfigAndFlags(conf, flags.Config, cmd)
+
+			status, err := run(conf, kubeconfigArgs, printFlags)
+			if err != nil {
+				return err
+			}
+
+			cmd.Annotations[statusAnnotation] = strconv.Itoa(status)
+			return nil
+		},
+	}
 
 	apiServer := ""
 	kubeconfigArgs.APIServer = &apiServer
 	kubeconfigArgs.AddFlags(rootCmd.PersistentFlags())
-	rootCmd.RegisterFlagCompletionFunc("context", contextsCompletionFunc)
 
-	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
-	rootCmd.Flags().BoolVarP(&flags.verbose, "verbose", "v", flags.verbose, "Verbose mode (Logged to stderr)")
+	rest.SetDefaultWarningHandler(rest.NewWarningWriter(io.Discard, rest.WarningWriterOptions{}))
+	set := &flag.FlagSet{}
+	klog.InitFlags(set)
+	rootCmd.PersistentFlags().AddGoFlagSet(set)
+
+	err := rootCmd.RegisterFlagCompletionFunc(
+		"context",
+		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return contextsCompletionFunc(kubeconfigArgs, toComplete)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	rootCmd.Flags().StringVarP(&cfgFile, "config", "", cfgFile, "Config file")
+	rootCmd.Flags().
+		StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
-	rootCmd.Flags().BoolVarP(&flags.includeAll, "include-all", "a", flags.includeAll, "Includes resources which are considered dynamic resources")
-	rootCmd.Flags().StringVarP(&flags.labelSelector, "selector", "l", flags.labelSelector, "Label selector (Is used for all apis)")
+	rootCmd.Flags().
+		BoolVarP(&flags.IncludeAll, flagIncludeAll, "a", false, "Includes resources which are considered dynamic resources")
+	rootCmd.Flags().
+		StringVarP(&flags.LabelSelector, flagLabelSelector, "l", "", "Label selector (Is used for all apis)")
+	rootCmd.Flags().
+		BoolVarP(&flags.NoStream, flagNoStream, "", false, "Display discovered resources at the end instead of live")
+	rootCmd.Flags().BoolVarP(&flags.Fail, flagFail, "", false, "Exit with an exit code > 0 if zombies are detected")
+	rootCmd.Flags().
+		StringSliceVarP(&flags.ExcludeClusters, flagExcludeCluster, "", []string{}, "Exclude cluster from zombie detection (default none)")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
+	return rootCmd, nil
 }
 
-func main() {
-	err := rootCmd.Execute()
-
-	if err == nil {
-		os.Exit(0)
+func loadConfig(configPath string) (*gitopszombiesv1.Config, error) {
+	_, err := os.Stat(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.V(1).Infof("Can't find config file at %s", configPath)
+			return &gitopszombiesv1.Config{}, nil
+		}
+		return nil, err
 	}
 
-	logger.Failuref("%v", err)
-	os.Exit(1)
+	json, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = gitopszombiesv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	obj, err := runtime.Decode(scheme.Codecs.UniversalDeserializer(), json)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg gitopszombiesv1.Config
+	switch o := obj.(type) {
+	case *gitopszombiesv1.Config:
+		cfg = *o
+	default:
+		err = errors.New("unsupported config")
+		return nil, err
+	}
+
+	return &cfg, nil
 }
 
-func run(cmd *cobra.Command, args []string) error {
-	if flags.version {
-		fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
-		return nil
+func mergeConfigAndFlags(conf *gitopszombiesv1.Config, flags gitopszombiesv1.Config, cmd *cobra.Command) {
+	// cmd line overrides config
+	if cmd.Flags().Changed(flagExcludeCluster) {
+		conf.ExcludeClusters = flags.ExcludeClusters
 	}
 
-	logger = stderrLogger{
-		stderr:  os.Stderr,
-		verbose: flags.verbose,
+	if cmd.Flags().Changed(flagFail) {
+		conf.Fail = flags.Fail
 	}
 
-	cfg, err := kubeconfigArgs.ToRESTConfig()
+	if cmd.Flags().Changed(flagIncludeAll) {
+		conf.IncludeAll = flags.IncludeAll
+	}
+
+	if cmd.Flags().Changed(flagLabelSelector) {
+		conf.LabelSelector = flags.LabelSelector
+	}
+
+	if cmd.Flags().Changed(flagNoStream) {
+		conf.NoStream = flags.NoStream
+	}
+}
+
+func run(
+	conf *gitopszombiesv1.Config,
+	kubeconfigArgs *genericclioptions.ConfigFlags,
+	printFlags *k8sget.PrintFlags,
+) (int, error) {
+	// default processing
+	detect, err := detector.New(conf, kubeconfigArgs, printFlags)
 	if err != nil {
-		return err
+		return statusFail, err
 	}
-
-	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	resourceCount, allZombies, err := detect.DetectZombies()
 	if err != nil {
-		return err
+		return statusFail, err
 	}
 
-	_, list, err := disc.ServerGroupsAndResources()
-	if err != nil {
-		return err
-	}
-
-	client, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	ch := make(chan unstructured.Unstructured)
-	var wgProducer, wgConsumer sync.WaitGroup
-
-	for _, group := range list {
-		logger.Debugf("discover resource group %#v", group.GroupVersion)
-		gv, err := schema.ParseGroupVersion(group.GroupVersion)
+	if conf.NoStream {
+		err = detect.PrintZombies(allZombies)
 		if err != nil {
-			return err
-		}
-
-	RESOURCES:
-		for _, resource := range group.APIResources {
-			logger.Debugf("discover resource %#v.%#v.%#v", resource.Name, resource.Group, resource.Version)
-
-			gvr := schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: resource.Name,
-			}
-
-			if !flags.includeAll {
-				for _, listed := range blacklist {
-					if listed == gvr {
-						continue RESOURCES
-					}
-				}
-			}
-
-			resAPI := client.Resource(gvr)
-
-			if !slices.Contains(resource.Verbs, "list") {
-				continue
-			}
-
-			wgProducer.Add(1)
-
-			go func(resAPI dynamic.ResourceInterface) {
-				defer wgProducer.Done()
-				handleResource(context.TODO(), resAPI, ch)
-			}(resAPI)
+			return statusFail, err
 		}
 	}
 
-	wgConsumer.Add(1)
-	go func() {
-		defer wgConsumer.Done()
-		printer(ch)
-	}()
-
-	wgProducer.Wait()
-	close(ch)
-	wgConsumer.Wait()
-
-	return nil
-}
-
-func getLabelSelector() string {
-	selector := ""
-	if !flags.includeAll {
-		selector = DEFAULT_LABEL_SELECTOR
+	var totalZombies int
+	for _, zombies := range allZombies {
+		totalZombies += len(zombies)
 	}
 
-	if flags.labelSelector != "" {
-		selector = strings.Join(append(strings.Split(selector, ","), strings.Split(flags.labelSelector, ",")...), ",")
+	if conf.NoStream && printFlags.OutputFormat != nil && *printFlags.OutputFormat == "" {
+		fmt.Printf("\nSummary: %d resources found, %d zombies detected\n", resourceCount, totalZombies)
 	}
 
-	return selector
-}
-
-func handleResource(ctx context.Context, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured) error {
-	list, err := resAPI.List(ctx, metav1.ListOptions{
-		LabelSelector: getLabelSelector(),
-	})
-
-	if err != nil {
-		return err
+	if conf.Fail && totalZombies > 0 {
+		return statusZombiesDetected, nil
 	}
 
-	for _, res := range list.Items {
-		logger.Debugf("validate resource %s %s %s", res.GetName(), res.GetNamespace(), res.GetAPIVersion())
-
-		if refs := res.GetOwnerReferences(); len(refs) > 0 {
-			logger.Debugf("ignore resource owned by parent %s %s %s", res.GetName(), res.GetNamespace(), res.GetAPIVersion())
-			continue
-		}
-
-		labels := res.GetLabels()
-		if helmName, ok := labels[FLUX_HELM_NAME_LABEL]; ok {
-			if helmNamespace, ok := labels[FLUX_HELM_NAMESPACE_LABEL]; ok {
-				logger.Debugf("helm %s %s\n", helmName, helmNamespace)
-				continue
-			}
-		}
-
-		if ksName, ok := labels[FLUX_KUSTOMIZE_NAME_LABEL]; ok {
-			if ksNamespace, ok := labels[FLUX_KUSTOMIZE_NAMESPACE_LABEL]; ok {
-				logger.Debugf("ks %s %s\n", ksName, ksNamespace)
-				continue
-			}
-		}
-
-		if res.GetKind() == "Secret" && res.GetAPIVersion() == "v1" {
-			if _, ok := res.GetAnnotations()["kubernetes.io/service-account.name"]; ok {
-				continue
-			}
-
-			if v, ok := res.GetLabels()["owner"]; ok && v == "helm" {
-				continue
-			}
-		}
-
-		ch <- res
-	}
-
-	return nil
-}
-
-func printer(ch chan unstructured.Unstructured) error {
-	p, err := printFlags.ToPrinter()
-	if err != nil {
-		return err
-	}
-
-	for res := range ch {
-		if *printFlags.OutputFormat == "" {
-			ok := res.GetObjectKind().GroupVersionKind()
-			fmt.Printf("%s: %s.%s\n", ok.String(), res.GetName(), res.GetNamespace())
-		} else {
-			if err := p.PrintObj(&res, os.Stdout); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return statusOK, nil
 }

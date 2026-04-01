@@ -6,8 +6,10 @@ builds:
   binary: gitops-zombies
   goos:
   - linux
-##  - darwin
+  - darwin
   - windows    
+  env:
+  - CGO_ENABLED=0
 
 archives:
 - id: cli
@@ -15,9 +17,15 @@ archives:
   builds:
   - cli
 
+checksum:
+  name_template: 'checksums.txt'
+
 source:
   enabled: true
   name_template: "{{ .ProjectName }}_{{ .Version }}_source_code"
+
+changelog:
+  use: github-native
 
 sboms:
 - id: source
@@ -26,7 +34,8 @@ sboms:
   - "{{ .ProjectName }}_{{ .Version }}_sbom.spdx.json"
 
 dockers:
-- image_templates: ["ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-amd64"]
+- image_templates:
+  - ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-amd64
   dockerfile: Dockerfile.release
   use: buildx
   ids:
@@ -40,8 +49,9 @@ dockers:
   - --label=org.opencontainers.image.version={{ .Version }}
   - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
   - --label=org.opencontainers.image.revision={{ .FullCommit }}
-  - --label=org.opencontainers.image.licenses=MIT
-- image_templates: ["ghcr.io/raffis/{{ .ProjectName }}:{{ .Version }}-arm64v8"]
+  - --label=org.opencontainers.image.licenses=Apache-2.0
+- image_templates: 
+  - "ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-arm64v8"
   goarch: arm64
   dockerfile: Dockerfile.release
   use: buildx
@@ -56,7 +66,17 @@ dockers:
   - --label=org.opencontainers.image.version={{ .Version }}
   - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
   - --label=org.opencontainers.image.revision={{ .FullCommit }}
-  - --label=org.opencontainers.image.licenses=MIT
+  - --label=org.opencontainers.image.licenses=Apache-2.0
+
+docker_manifests:
+- name_template: ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}
+  image_templates:
+  - ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-amd64
+  - ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-arm64v8
+- name_template: ghcr.io/raffis/{{ .ProjectName }}:latest
+  image_templates:
+  - ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-amd64
+  - ghcr.io/raffis/{{ .ProjectName }}:v{{ .Version }}-arm64v8
 
 brews:
 - ids:
@@ -64,25 +84,34 @@ brews:
   tap:
     owner: raffis
     name: gitops-zombies
-  folder: Formulas
+    token: "{{ .Env.REPO_TOKEN }}"
+  description:  Identify kubernetes resources which are not managed by GitOps
+  homepage: https://github.com/raffis/{{ .ProjectName }}
+  folder: Formula
   test: |
-    system "#{bin}/kjournal help"      
+    system "#{bin}/gitops-zombies -h"      
 
 signs:
 - cmd: cosign
   certificate: "${artifact}.pem"
   env:
-  - COSIGN_PASSWORD=
+  - COSIGN_EXPERIMENTAL=1
   args:
   - sign-blob
-  - "--key=cosign.key"
   - "--output-certificate=${certificate}"
   - "--output-signature=${signature}"
   - "${artifact}"
+  - --yes
   artifacts: checksum
   output: true
 
 docker_signs:
-- artifacts: images
+- cmd: cosign
   env:
-  - COSIGN_PASSWORD=
+  - COSIGN_EXPERIMENTAL=1
+  artifacts: images
+  output: true
+  args:
+  - 'sign'
+  - '${artifact}'
+  - --yes

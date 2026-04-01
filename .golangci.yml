@@ -1,0 +1,148 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+issues:
+  max-same-issues: 50
+  exclude-dirs:
+    - vendor
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - bodyclose
+        - dupl
+        - errcheck
+        - goconst
+        - noctx
+        - wrapcheck
+
+formatters:
+  enable:
+    - goimports # checks if the code and import statements are formatted according to the 'goimports' command
+    - golines # checks if code is formatted, and fixes long lines
+
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/raffis/gitops-zombies
+
+    golines:
+      max-len: 120
+      tab-len: 1
+
+linters:
+  default: all
+  disable:
+    # Disabled by choice
+    - contextcheck # too many false positives
+    - cyclop # duplicate of gocyclo
+    - depguard # not needed for this project
+    - dogsled # too strict
+    - err113 # too strict
+    - exhaustruct # too strict
+    - forbidigo # fmt.Printf is appropriate for CLI tools
+    - forcetypeassert # too strict
+    - funlen # some functions are legitimately long
+    - gochecknoglobals # too strict
+    - gochecknoinits # too strict
+    - gosec # G304 warnings for config file reading are false positives
+    - godox # allow TODO/FIXME comments
+    - inamedparam # too strict for function signatures
+    - ireturn # not always applicable
+    - lll # handled by golines
+    - maintidx # maintainability index too strict for tests
+    - mnd # too strict
+    - modernize # WaitGroup.Go suggestions not applicable to sync.WaitGroup
+    - nlreturn # too strict on whitespace
+    - nonamedreturns # sometimes named returns are useful
+    - paralleltest # not always needed
+    - perfsprint # not critical
+    - prealloc # premature optimization
+    - rowserrcheck # duplicate of sqlclosecheck
+    - tagalign # too strict
+    - tagliatelle # not needed
+    - testableexamples # too strict
+    - testpackage # not always needed
+    - varnamelen # too strict on variable names
+    - wrapcheck # too strict
+    - wsl # deprecated whitespace linter
+    - wsl_v5 # too strict on whitespace
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    enable-all: true
+    settings:
+      shadow:
+        strict: true
+
+  revive:
+    enable-all-rules: false
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: var-naming
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  staticcheck:
+    checks: ["all"]
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+      - opinionated
+    disabled-checks:
+      - whyNoLint # complains about nolint comments
+      - unnamedResult # conflicts with nonamedreturns
+
+  gocyclo:
+    min-complexity: 30
+
+  gocognit:
+    min-complexity: 20
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  misspell:
+    locale: US
+
+  unparam:
+    check-exported: false
+
+  nakedret:
+    max-func-lines: 30
+
+  godot:
+    scope: declarations
+    capital: true
+
+  testifylint:
+    enable-all: true

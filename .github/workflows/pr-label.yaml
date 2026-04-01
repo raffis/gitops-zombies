@@ -1,0 +1,11 @@
+name: pr-label
+on: pull_request
+jobs:
+  size-label:
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.head.repo.fork && github.actor != 'dependabot[bot]' }}
+    steps:
+      - name: size-label
+        uses: "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff" # v0.5.7
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
