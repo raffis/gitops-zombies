@@ -75,6 +75,25 @@ func toExitCode(codeStr string) int {
 	return code
 }
 
+const logo = `
+      .----------.
+     /  x      _  \
+    |  /      (o)  |
+    |      ..  _   |
+    |   ______|_|  |   
+     \____________/
+        _|[  ]|_
+       /        \
+      /|        |
+     / |        |
+    *  |________|
+       |   ||   |
+       |   ||   |
+       |   ||   |
+       |___||___|
+      /_   ||  _ \
+`
+
 func parseCliArgs() (*cobra.Command, error) {
 	flags := args{Config: gitopszombiesv1.Config{
 		TypeMeta:         metav1.TypeMeta{},
@@ -94,12 +113,15 @@ func parseCliArgs() (*cobra.Command, error) {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Short:         "Find kubernetes resources which are not managed by GitOps",
-		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
+		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluster and evaluates whether they are managed by a flux Kustomization or a HelmRelease.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Annotations = make(map[string]string)
 			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
 
 			if flags.version {
+				fmt.Println("gitops-zombies")
+				fmt.Print(logo)
+				fmt.Println()
 				fmt.Printf(`{"version":"%s","sha":"%s","date":"%s"}`+"\n", version, commit, date)
 				cmd.Annotations[statusAnnotation] = strconv.Itoa(statusOK)
 				return nil
@@ -129,6 +151,7 @@ func parseCliArgs() (*cobra.Command, error) {
 	rest.SetDefaultWarningHandler(rest.NewWarningWriter(io.Discard, rest.WarningWriterOptions{}))
 	set := &flag.FlagSet{}
 	klog.InitFlags(set)
+	_ = set.Set("v", "-1")
 	rootCmd.PersistentFlags().AddGoFlagSet(set)
 
 	err := rootCmd.RegisterFlagCompletionFunc(
