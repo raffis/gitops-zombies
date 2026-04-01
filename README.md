@@ -1,7 +1,7 @@
 o# GitOps zombies
 
 [![release](https://img.shields.io/github/release/raffis/gitops-zombies/all.svg)](https://github.com/raffis/gitops-zombies/releases)
-[![release](https://github.com/doodlescheduling/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/doodlescheduling/gitops-zombies/actions/workflows/release.yaml)
+[![release](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml)
 [![report](https://goreportcard.com/badge/github.com/raffis/gitops-zombies)](https://goreportcard.com/report/github.com/raffis/gitops-zombies)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/raffis/gitops-zombies/badge)](https://api.securityscorecards.dev/projects/github.com/raffis/gitops-zombies)
 [![Coverage Status](https://coveralls.io/repos/github/raffis/gitops-zombies/badge.svg?branch=main)](https://coveralls.io/github/raffis/gitops-zombies?branch=main)
