@@ -1,14 +1,14 @@
-o# GitOps zombies
+# GitOps zombies
 
 [![release](https://img.shields.io/github/release/raffis/gitops-zombies/all.svg)](https://github.com/raffis/gitops-zombies/releases)
-[![release](https://github.com/doodlescheduling/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/doodlescheduling/gitops-zombies/actions/workflows/release.yaml)
+[![release](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml/badge.svg)](https://github.com/raffis/gitops-zombies/actions/workflows/release.yaml)
 [![report](https://goreportcard.com/badge/github.com/raffis/gitops-zombies)](https://goreportcard.com/report/github.com/raffis/gitops-zombies)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/raffis/gitops-zombies/badge)](https://api.securityscorecards.dev/projects/github.com/raffis/gitops-zombies)
 [![Coverage Status](https://coveralls.io/repos/github/raffis/gitops-zombies/badge.svg?branch=main)](https://coveralls.io/github/raffis/gitops-zombies?branch=main)
 [![license](https://img.shields.io/github/license/raffis/gitops-zombies.svg)](https://github.com/raffis/gitops-zombies/blob/main/LICENSE)
 
-This simple tool will help you find kubernetes resources which are not managed via GitOps (flux2).
-Wether you are migrating to a GitOps workflow or have disabled pruning this tools will help in either case.
+Find kubernetes resources which are not managed via GitOps (flux2).
+Wether you are migrating to a GitOps workflow or have pruning disabled. This tool will help in either case.
 
 <p align="center"><img src="https://github.com/raffis/gitops-zombies/blob/main/assets/logo.png?raw=true" alt="logo"/></p>
 
