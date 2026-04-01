@@ -5,8 +5,8 @@ permissions: {}
 on:
   pull_request:
     branches:
-      - master
-      - main
+    - master
+    - main
 
 jobs:
   validate-config:
