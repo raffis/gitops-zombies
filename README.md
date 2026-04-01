@@ -84,12 +84,12 @@ Flags:
       --as string                           Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --as-group stringArray                Group to impersonate for the operation, this flag can be repeated to specify multiple groups.
       --as-uid string                       UID to impersonate for the operation.
-      --cache-dir string                    Default cache directory (default "/home/raffael/.kube/cache")
+      --cache-dir string                    Default cache directory (default "/.kube/cache")
       --certificate-authority string        Path to a cert file for the certificate authority
       --client-certificate string           Path to a client certificate file for TLS
       --client-key string                   Path to a client key file for TLS
       --cluster string                      The name of the kubeconfig cluster to use
-      --config string                       Config file (default "/home/raffael/.gitops-zombies.yaml")
+      --config string                       Config file (default "~/.gitops-zombies.yaml")
       --context string                      The name of the kubeconfig context to use
       --disable-compression                 If true, opt-out of response compression for all requests to the server
       --exclude-cluster strings             Exclude cluster from zombie detection (default none)
