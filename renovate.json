@@ -17,6 +17,11 @@
     {
       "semanticCommitScope": "deps-dev",
       "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "Automerge non-major updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
     }
   ],
   "postUpdateOptions": [

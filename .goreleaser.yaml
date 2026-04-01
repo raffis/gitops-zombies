@@ -82,7 +82,7 @@ docker_manifests:
 homebrew_casks:
 - ids:
   - cli
-  tap:
+  repository:
     owner: raffis
     name: gitops-zombies
     token: "{{ .Env.GITHUB_TOKEN }}"

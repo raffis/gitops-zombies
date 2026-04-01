@@ -2,9 +2,13 @@ name: scan
 
 on:
   push:
-    branches: [ master ]
+    branches:
+    - master
+    - main
   pull_request:
-    branches: [ master ]
+    branches: 
+    - master
+    - main
   schedule:
     - cron: '18 10 * * 3'
 
