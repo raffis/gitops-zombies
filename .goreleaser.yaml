@@ -95,11 +95,10 @@ signs:
   env:
   - COSIGN_EXPERIMENTAL=1
   args:
-  - sign-blob
-  - "--output-certificate=${certificate}"
-  - "--output-signature=${signature}"
+  - "sign-blob"
+  - "--yes"
+  - "--bundle=${artifact}.bundle"
   - "${artifact}"
-  - --yes
   artifacts: all
   output: true
 
