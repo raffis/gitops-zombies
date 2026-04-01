@@ -3,6 +3,8 @@ name: pr-label
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   size-label:
     runs-on: ubuntu-latest
