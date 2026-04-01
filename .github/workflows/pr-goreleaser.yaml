@@ -25,4 +25,3 @@ jobs:
           args: check
         env:
           RUNNER_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ secrets.DOODLE_OSS_BOT}}
