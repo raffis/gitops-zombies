@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"context"
 	"testing"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2"
@@ -463,7 +462,7 @@ func TestDiscovery(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ch := make(chan unstructured.Unstructured, test.expectedPass+1)
 			discovery := NewDiscovery(klog.NewKlogr(), test.filters()...)
-			err := discovery.Discover(context.TODO(), test.list(), ch)
+			err := discovery.Discover(t.Context(), test.list(), ch)
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedPass, len(ch))
 		})

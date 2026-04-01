@@ -54,7 +54,7 @@ linters:
     - lll # handled by golines
     - maintidx # maintainability index too strict for tests
     - mnd # too strict
-    - modernize # WaitGroup.Go suggestions not applicable to sync.WaitGroup
+    #- modernize # WaitGroup.Go suggestions not applicable to sync.WaitGroup
     - nlreturn # too strict on whitespace
     - nonamedreturns # sometimes named returns are useful
     - paralleltest # not always needed
@@ -68,7 +68,7 @@ linters:
     - varnamelen # too strict on variable names
     - wrapcheck # too strict
     - wsl # deprecated whitespace linter
-    - wsl_v5 # too strict on whitespace
+     #- wsl_v5 # too strict on whitespace
 
 linters-settings:
   errcheck:

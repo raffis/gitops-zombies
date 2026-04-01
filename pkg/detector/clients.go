@@ -118,12 +118,12 @@ func getClusterClientsFromConfig(
 		return "", clusterClients{}, err
 	}
 
+	restConfig.WarningHandler = rest.NoWarnings{}
+
 	dynClient, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
 		return "", clusterClients{}, err
 	}
-
-	restConfig.WarningHandler = rest.NoWarnings{}
 
 	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
 	if err != nil {
