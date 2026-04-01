@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
-	"github.com/raffis/gitops-zombies/pkg/detector"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,6 +19,9 @@ import (
 	"k8s.io/client-go/util/homedir"
 	"k8s.io/klog/v2"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
+
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
+	"github.com/raffis/gitops-zombies/pkg/detector"
 )
 
 const (
@@ -31,6 +32,7 @@ const (
 
 type args struct {
 	gitopszombiesv1.Config
+
 	version bool
 }
 
@@ -38,7 +40,9 @@ const (
 	statusOK = iota
 	statusFail
 	statusZombiesDetected
+)
 
+const (
 	statusAnnotation = "status"
 
 	flagExcludeCluster = "exclude-cluster"
@@ -91,7 +95,7 @@ func parseCliArgs() (*cobra.Command, error) {
 		SilenceErrors: true,
 		Short:         "Find kubernetes resources which are not managed by GitOps",
 		Long:          `Finds all kubernetes resources from all installed apis on a kubernetes cluste and evaluates whether they are managed by a flux kustomization or a helmrelease.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cmd.Annotations = make(map[string]string)
 			cmd.Annotations[statusAnnotation] = strconv.Itoa(statusFail)
 
@@ -127,21 +131,29 @@ func parseCliArgs() (*cobra.Command, error) {
 	klog.InitFlags(set)
 	rootCmd.PersistentFlags().AddGoFlagSet(set)
 
-	err := rootCmd.RegisterFlagCompletionFunc("context", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return contextsCompletionFunc(kubeconfigArgs, toComplete)
-	})
+	err := rootCmd.RegisterFlagCompletionFunc(
+		"context",
+		func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return contextsCompletionFunc(kubeconfigArgs, toComplete)
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	rootCmd.Flags().StringVarP(&cfgFile, "config", "", cfgFile, "Config file")
-	rootCmd.Flags().StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
+	rootCmd.Flags().
+		StringVarP(printFlags.OutputFormat, "output", "o", *printFlags.OutputFormat, fmt.Sprintf(`Output format. One of: (%s). See custom columns [https://kubernetes.io/docs/reference/kubectl/overview/#custom-columns], golang template [http://golang.org/pkg/text/template/#pkg-overview] and jsonpath template [https://kubernetes.io/docs/reference/kubectl/jsonpath/].`, strings.Join(printFlags.AllowedFormats(), ", ")))
 	rootCmd.Flags().BoolVarP(&flags.version, "version", "", flags.version, "Print version and exit")
-	rootCmd.Flags().BoolVarP(&flags.IncludeAll, flagIncludeAll, "a", false, "Includes resources which are considered dynamic resources")
-	rootCmd.Flags().StringVarP(&flags.LabelSelector, flagLabelSelector, "l", "", "Label selector (Is used for all apis)")
-	rootCmd.Flags().BoolVarP(&flags.NoStream, flagNoStream, "", false, "Display discovered resources at the end instead of live")
+	rootCmd.Flags().
+		BoolVarP(&flags.IncludeAll, flagIncludeAll, "a", false, "Includes resources which are considered dynamic resources")
+	rootCmd.Flags().
+		StringVarP(&flags.LabelSelector, flagLabelSelector, "l", "", "Label selector (Is used for all apis)")
+	rootCmd.Flags().
+		BoolVarP(&flags.NoStream, flagNoStream, "", false, "Display discovered resources at the end instead of live")
 	rootCmd.Flags().BoolVarP(&flags.Fail, flagFail, "", false, "Exit with an exit code > 0 if zombies are detected")
-	rootCmd.Flags().StringSliceVarP(&flags.ExcludeClusters, flagExcludeCluster, "", []string{}, "Exclude cluster from zombie detection (default none)")
+	rootCmd.Flags().
+		StringSliceVarP(&flags.ExcludeClusters, flagExcludeCluster, "", []string{}, "Exclude cluster from zombie detection (default none)")
 
 	rootCmd.DisableAutoGenTag = true
 	rootCmd.SetOut(os.Stdout)
@@ -149,9 +161,13 @@ func parseCliArgs() (*cobra.Command, error) {
 }
 
 func loadConfig(configPath string) (*gitopszombiesv1.Config, error) {
-	if _, err := os.Stat(configPath); err != nil {
-		klog.V(1).Infof("Can't find config file at %s", configPath)
-		return &gitopszombiesv1.Config{}, nil
+	_, err := os.Stat(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.V(1).Infof("Can't find config file at %s", configPath)
+			return &gitopszombiesv1.Config{}, nil
+		}
+		return nil, err
 	}
 
 	json, err := os.ReadFile(configPath)
@@ -204,7 +220,11 @@ func mergeConfigAndFlags(conf *gitopszombiesv1.Config, flags gitopszombiesv1.Con
 	}
 }
 
-func run(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, printFlags *k8sget.PrintFlags) (int, error) {
+func run(
+	conf *gitopszombiesv1.Config,
+	kubeconfigArgs *genericclioptions.ConfigFlags,
+	printFlags *k8sget.PrintFlags,
+) (int, error) {
 	// default processing
 	detect, err := detector.New(conf, kubeconfigArgs, printFlags)
 	if err != nil {

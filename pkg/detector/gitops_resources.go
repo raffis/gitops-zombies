@@ -3,7 +3,7 @@ package detector
 import (
 	"context"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,7 +13,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, labelSelector string) (items []unstructured.Unstructured, err error) {
+func listResources(
+	ctx context.Context,
+	resAPI dynamic.ResourceInterface,
+	labelSelector string,
+) (items []unstructured.Unstructured, err error) {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})
@@ -24,12 +28,16 @@ func listResources(ctx context.Context, resAPI dynamic.ResourceInterface, labelS
 	return list.Items, err
 }
 
-func listHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, labelSelector string) ([]helmapi.HelmRelease, error) {
+func listHelmReleases(
+	ctx context.Context,
+	gitopsClient dynamic.Interface,
+	labelSelector string,
+) ([]helmapi.HelmRelease, error) {
 	helmReleases := []helmapi.HelmRelease{}
 	list, err := listResources(ctx,
 		gitopsClient.Resource(schema.GroupVersionResource{
 			Group:    "helm.toolkit.fluxcd.io",
-			Version:  "v2beta1",
+			Version:  "v2",
 			Resource: "helmreleases",
 		}), labelSelector)
 	if err != nil {

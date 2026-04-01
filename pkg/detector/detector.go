@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
-	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
-	"github.com/raffis/gitops-zombies/pkg/collector"
-	"golang.org/x/exp/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +20,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	k8sget "k8s.io/kubectl/pkg/cmd/get"
+
+	gitopszombiesv1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
+	"github.com/raffis/gitops-zombies/pkg/collector"
 )
 
 const (
@@ -52,7 +53,11 @@ type Detector struct {
 }
 
 // New creates a new detection object.
-func New(conf *gitopszombiesv1.Config, kubeconfigArgs *genericclioptions.ConfigFlags, printFlags *k8sget.PrintFlags) (*Detector, error) {
+func New(
+	conf *gitopszombiesv1.Config,
+	kubeconfigArgs *genericclioptions.ConfigFlags,
+	printFlags *k8sget.PrintFlags,
+) (*Detector, error) {
 	gitopsDynClient, err := getDynClient(kubeconfigArgs)
 	if err != nil {
 		return nil, err
@@ -107,9 +112,15 @@ func (d *Detector) DetectZombies() (resourceCount int, zombies map[string][]unst
 		go func(cluster string) {
 			defer wg.Done()
 
-			clusterResourceCount, clusterZombies, err := d.detectZombiesOnCluster(cluster, helmReleases, kustomizations, clustersConfigs[cluster].dynamic, clustersConfigs[cluster].discovery)
+			clusterResourceCount, clusterZombies, err := d.detectZombiesOnCluster(
+				cluster,
+				helmReleases,
+				kustomizations,
+				clustersConfigs[cluster].dynamic,
+				clustersConfigs[cluster].discovery,
+			)
 			if err != nil {
-				klog.Errorf("[%s] could not detect zombies on: %w", cluster, err)
+				klog.Errorf("[%s] could not detect zombies on: %v", cluster, err)
 			}
 			ch <- clusterDetectionResult{
 				cluster:       cluster,
@@ -146,7 +157,8 @@ func (d *Detector) PrintZombies(allZombies map[string][]unstructured.Unstructure
 				fmt.Printf("[%s] %s: %s.%s\n", clusterName, ok.String(), zombie.GetName(), zombie.GetNamespace())
 			} else {
 				z := zombie
-				if err := p.PrintObj(&z, os.Stdout); err != nil {
+				err := p.PrintObj(&z, os.Stdout)
+				if err != nil {
 					return err
 				}
 			}
@@ -156,7 +168,13 @@ func (d *Detector) PrintZombies(allZombies map[string][]unstructured.Unstructure
 	return nil
 }
 
-func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []helmapi.HelmRelease, kustomizations []ksapi.Kustomization, clusterDynClient dynamic.Interface, clusterDiscoveryClient *discovery.DiscoveryClient) (int, []unstructured.Unstructured, error) {
+func (d *Detector) detectZombiesOnCluster(
+	clusterName string,
+	helmReleases []helmapi.HelmRelease,
+	kustomizations []ksapi.Kustomization,
+	clusterDynClient dynamic.Interface,
+	clusterDiscoveryClient *discovery.DiscoveryClient,
+) (int, []unstructured.Unstructured, error) {
 	var (
 		resourceCount int
 		zombies       []unstructured.Unstructured
@@ -199,7 +217,8 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 		}
 
 		for _, resource := range group.APIResources {
-			klog.V(1).Infof("[%s] discover resource %#v.%#v.%#v", clusterName, resource.Name, resource.Group, resource.Version)
+			klog.V(1).
+				Infof("[%s] discover resource %#v.%#v.%#v", clusterName, resource.Name, resource.Group, resource.Version)
 
 			gvr, err := d.validateResource(*d.kubeconfigArgs.Namespace, gv, resource)
 			if err != nil {
@@ -216,7 +235,7 @@ func (d *Detector) detectZombiesOnCluster(clusterName string, helmReleases []hel
 
 				count, err := handleResource(context.TODO(), discover, resAPI, ch, d.getLabelSelector())
 				if err != nil {
-					klog.V(1).Infof("[%s] could not handle resource: %w", clusterName, err)
+					klog.V(1).Infof("[%s] could not handle resource: %v", clusterName, err)
 				}
 				resourceCount += count
 			}(resAPI)
@@ -263,7 +282,12 @@ func (d *Detector) listGitopsResources() ([]helmapi.HelmRelease, []ksapi.Kustomi
 	}
 
 	klog.V(1).Infof("discover all managed clustersClients")
-	clustersClients, err := d.getClustersClientsFromKustomizationsAndHelmReleases(context.TODO(), d.gitopsDynClient, kustomizations, helmReleases)
+	clustersClients, err := d.getClustersClientsFromKustomizationsAndHelmReleases(
+		context.TODO(),
+		d.gitopsDynClient,
+		kustomizations,
+		helmReleases,
+	)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get managed clustersClients: %w", err)
 	}
@@ -275,12 +299,16 @@ func (d *Detector) listGitopsResources() ([]helmapi.HelmRelease, []ksapi.Kustomi
 	return helmReleases, kustomizations, clustersClients, nil
 }
 
-func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(ctx context.Context, gitopsClient dynamic.Interface, kustomizations []ksapi.Kustomization, helmReleases []helmapi.HelmRelease) (map[string]clusterClients, error) {
+func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(
+	ctx context.Context,
+	gitopsClient dynamic.Interface,
+	kustomizations []ksapi.Kustomization,
+	helmReleases []helmapi.HelmRelease,
+) (map[string]clusterClients, error) {
 	resourcesWithSecrets := map[string]*unstructured.Unstructured{}
 	clients := make(map[string]clusterClients)
 
 	for _, ks := range kustomizations {
-		ks := ks
 		if ks.Spec.KubeConfig != nil {
 			key := fmt.Sprintf("%s/%s", ks.Namespace, ks.Spec.KubeConfig.SecretRef.Name)
 			if _, ok := resourcesWithSecrets[key]; !ok {
@@ -294,7 +322,6 @@ func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(ctx conte
 	}
 
 	for _, hr := range helmReleases {
-		hr := hr
 		if hr.Spec.KubeConfig != nil {
 			key := fmt.Sprintf("%s/%s", hr.Namespace, hr.Spec.KubeConfig.SecretRef.Name)
 			if _, ok := resourcesWithSecrets[key]; !ok {
@@ -308,7 +335,12 @@ func (d *Detector) getClustersClientsFromKustomizationsAndHelmReleases(ctx conte
 	}
 
 	for _, r := range resourcesWithSecrets {
-		clusterName, clusterClts, err := getClusterClientsFromConfig(ctx, gitopsClient, r.GetNamespace(), r.Object["spec"])
+		clusterName, clusterClts, err := getClusterClientsFromConfig(
+			ctx,
+			gitopsClient,
+			r.GetNamespace(),
+			r.Object["spec"],
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -332,9 +364,18 @@ func (d *Detector) getLabelSelector() string {
 	return selector
 }
 
-func (d *Detector) validateResource(ns string, gv schema.GroupVersion, resource metav1.APIResource) (*schema.GroupVersionResource, error) {
+func (d *Detector) validateResource(
+	ns string,
+	gv schema.GroupVersion,
+	resource metav1.APIResource,
+) (*schema.GroupVersionResource, error) {
 	if ns != "" && !resource.Namespaced {
-		return nil, fmt.Errorf("skipping cluster scoped resource %#v.%#v.%#v, namespaced scope was requested", resource.Name, resource.Group, resource.Version)
+		return nil, fmt.Errorf(
+			"skipping cluster scoped resource %#v.%#v.%#v, namespaced scope was requested",
+			resource.Name,
+			resource.Group,
+			resource.Version,
+		)
 	}
 
 	gvr := schema.GroupVersionResource{
@@ -344,10 +385,8 @@ func (d *Detector) validateResource(ns string, gv schema.GroupVersion, resource 
 	}
 
 	if !d.conf.IncludeAll {
-		for _, listed := range getBlacklist() {
-			if listed == gvr {
-				return nil, fmt.Errorf("skipping blacklisted api resource %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)
-			}
+		if slices.Contains(getBlacklist(), gvr) {
+			return nil, fmt.Errorf("skipping blacklisted api resource %v/%v.%v", gvr.Group, gvr.Version, gvr.Resource)
 		}
 	}
 
@@ -358,7 +397,13 @@ func (d *Detector) validateResource(ns string, gv schema.GroupVersion, resource 
 	return &gvr, nil
 }
 
-func handleResource(ctx context.Context, discover collector.Interface, resAPI dynamic.ResourceInterface, ch chan unstructured.Unstructured, labelSelector string) (int, error) {
+func handleResource(
+	ctx context.Context,
+	discover collector.Interface,
+	resAPI dynamic.ResourceInterface,
+	ch chan unstructured.Unstructured,
+	labelSelector string,
+) (int, error) {
 	list, err := resAPI.List(ctx, metav1.ListOptions{
 		LabelSelector: labelSelector,
 	})

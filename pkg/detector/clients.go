@@ -69,7 +69,12 @@ func getRestClient(kubeconfigArgs *genericclioptions.ConfigFlags) (*rest.RESTCli
 	return client, nil
 }
 
-func getClusterClientsFromConfig(ctx context.Context, gitopsClient dynamic.Interface, namespace string, specStr interface{}) (string, clusterClients, error) {
+func getClusterClientsFromConfig(
+	ctx context.Context,
+	gitopsClient dynamic.Interface,
+	namespace string,
+	specStr any,
+) (string, clusterClients, error) {
 	spec := ksapi.KustomizationSpec{}
 	b, err := json.Marshal(specStr)
 	if err != nil {
@@ -92,14 +97,21 @@ func getClusterClientsFromConfig(ctx context.Context, gitopsClient dynamic.Inter
 		key := spec.KubeConfig.SecretRef.Key
 		kubeConfig = secret.Data[key]
 		if kubeConfig == nil {
-			return "", clusterClients{}, fmt.Errorf("KubeConfig secret '%s' does not contain a '%s' key with a kubeconfig", spec.KubeConfig.SecretRef.Name, key)
+			return "", clusterClients{}, fmt.Errorf(
+				"KubeConfig secret '%s' does not contain a '%s' key with a kubeconfig",
+				spec.KubeConfig.SecretRef.Name,
+				key,
+			)
 		}
 	case secret.Data["value"] != nil:
 		kubeConfig = secret.Data["value"]
 	case secret.Data["value.yaml"] != nil:
 		kubeConfig = secret.Data["value.yaml"]
 	default:
-		return "", clusterClients{}, fmt.Errorf("KubeConfig secret '%s' does not contain a 'value' nor 'value.yaml' key with a kubeconfig", spec.KubeConfig.SecretRef.Name)
+		return "", clusterClients{}, fmt.Errorf(
+			"KubeConfig secret '%s' does not contain a 'value' nor 'value.yaml' key with a kubeconfig",
+			spec.KubeConfig.SecretRef.Name,
+		)
 	}
 	restConfig, err := clientcmd.RESTConfigFromKubeConfig(kubeConfig)
 	if err != nil {

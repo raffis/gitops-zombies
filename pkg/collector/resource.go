@@ -1,15 +1,17 @@
+// Package collector provides functionality for discovering and collecting Kubernetes resources.
 package collector
 
 import (
 	"context"
 	"regexp"
 
-	helmapi "github.com/fluxcd/helm-controller/api/v2beta1"
+	helmapi "github.com/fluxcd/helm-controller/api/v2"
 	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
-	v1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/object"
+
+	v1 "github.com/raffis/gitops-zombies/pkg/apis/gitopszombies/v1"
 )
 
 const (
@@ -41,7 +43,11 @@ func NewDiscovery(logger klog.Logger, filters ...FilterFunc) Interface {
 }
 
 // Discover validates discovered resources against all filters and adds it to consumer channel.
-func (d *discovery) Discover(_ context.Context, list *unstructured.UnstructuredList, ch chan unstructured.Unstructured) error {
+func (d *discovery) Discover(
+	_ context.Context,
+	list *unstructured.UnstructuredList,
+	ch chan unstructured.Unstructured,
+) error {
 RESOURCES:
 	for _, res := range list.Items {
 		d.logger.V(1).Info("validate resource", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
@@ -62,7 +68,8 @@ RESOURCES:
 func IgnoreOwnedResource() FilterFunc {
 	return func(res unstructured.Unstructured, logger klog.Logger) bool {
 		if refs := res.GetOwnerReferences(); len(refs) > 0 {
-			logger.V(1).Info("ignore resource owned by parent", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
+			logger.V(1).
+				Info("ignore resource owned by parent", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
 			return true
 		}
 
@@ -72,7 +79,7 @@ func IgnoreOwnedResource() FilterFunc {
 
 // IgnoreServiceAccountSecret returns a FilterFunc which filters secrets linked to a service account.
 func IgnoreServiceAccountSecret() FilterFunc {
-	return func(res unstructured.Unstructured, logger klog.Logger) bool {
+	return func(res unstructured.Unstructured, _ klog.Logger) bool {
 		if res.GetKind() == "Secret" && res.GetAPIVersion() == "v1" {
 			if _, ok := res.GetAnnotations()["kubernetes.io/service-account.name"]; ok {
 				return true
@@ -85,7 +92,7 @@ func IgnoreServiceAccountSecret() FilterFunc {
 
 // IgnoreHelmSecret returns a FilterFunc which filters secrets owned by helm.
 func IgnoreHelmSecret() FilterFunc {
-	return func(res unstructured.Unstructured, logger klog.Logger) bool {
+	return func(res unstructured.Unstructured, _ klog.Logger) bool {
 		if res.GetKind() == "Secret" && res.GetAPIVersion() == "v1" {
 			if v, ok := res.GetLabels()["owner"]; ok && v == "helm" {
 				return true
@@ -106,7 +113,8 @@ func IgnoreIfHelmReleaseFound(helmReleases []helmapi.HelmRelease) FilterFunc {
 					return true
 				}
 
-				logger.V(1).Info("helmrelease not found from resource", "helmReleaseName", helmName, "helmReleaseNamespace", helmNamespace, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
+				logger.V(1).
+					Info("helmrelease not found from resource", "helmReleaseName", helmName, "helmReleaseNamespace", helmNamespace, "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion())
 			}
 		}
 
@@ -132,7 +140,8 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 			}
 			id := obj.String()
 
-			logger.V(1).Info("lookup kustomization inventory", "kustomizationName", ksName, "kustomizationNamespace", ksNamespace, "resourceId", id)
+			logger.V(1).
+				Info("lookup kustomization inventory", "kustomizationName", ksName, "kustomizationNamespace", ksNamespace, "resourceId", id)
 
 			if ks.Status.Inventory != nil {
 				for _, entry := range ks.Status.Inventory.Entries {
@@ -142,17 +151,19 @@ func IgnoreIfKustomizationFound(kustomizations []ksapi.Kustomization) FilterFunc
 				}
 			}
 
-			logger.V(1).Info("resource is not part of the kustomization inventory", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
+			logger.V(1).
+				Info("resource is not part of the kustomization inventory", "name", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
 			return false
 		}
-		logger.V(1).Info("kustomization not found from resource", "resource", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
+		logger.V(1).
+			Info("kustomization not found from resource", "resource", res.GetName(), "namespace", res.GetNamespace(), "apiVersion", res.GetAPIVersion(), "kustomizationName", ksName, "kustomizationNamespace", ksNamespace)
 		return false
 	}
 }
 
 // IgnoreRuleExclusions returns a FilterFunc which excludes resources part of configuration exclusions.
 func IgnoreRuleExclusions(cluster string, exclusions []v1.ExcludeResources) FilterFunc {
-	return func(res unstructured.Unstructured, logger klog.Logger) bool {
+	return func(res unstructured.Unstructured, _ klog.Logger) bool {
 		for _, exclusion := range exclusions {
 			if !matchesCluster(cluster, exclusion.Cluster) {
 				continue
