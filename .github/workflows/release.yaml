@@ -39,5 +39,5 @@ jobs:
           version: latest
           args: release --clean --skip=validate
         env:
+          GITHUB_PUBLISH_TOKEN: ${{ secrets.BOT_TOKEN_GITHUB }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
