@@ -31,7 +31,7 @@ It also acknowledges the following facts:
 For Linux and Mac OS users:
 ```
 brew tap raffis/gitops-zombies
-brew install gitops-zombies
+brew install --cask gitops-zombies
 ```
 
 For windows download the .exe from the latest stable release.
