@@ -91,21 +91,16 @@ homebrew_casks:
 
 signs:
 - cmd: cosign
-  certificate: "${artifact}.pem"
-  env:
-  - COSIGN_EXPERIMENTAL=1
+  signature: "${artifact}.sigstore.json"
   args:
   - "sign-blob"
   - "--yes"
-  - "--bundle=${artifact}.bundle"
+  - "--bundle=${signature}"
   - "${artifact}"
   artifacts: all
-  output: true
 
 docker_signs:
 - cmd: cosign
-  env:
-  - COSIGN_EXPERIMENTAL=1
   artifacts: images
   output: true
   args:
