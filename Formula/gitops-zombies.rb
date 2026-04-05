@@ -9,8 +9,8 @@ class GitopsZombies < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/raffis/gitops-zombies/releases/download/v0.0.9/gitops-zombies_0.0.9_darwin_arm64.tar.gz"
-      sha256 "727660ec8c7f337b6e207b1dbceb10bdb70039bacf136b4c560b08a0abc0294b"
+      url "https://github.com/raffis/gitops-zombies/archive/refs/tags/v0.1.0.tar.gz"
+      sha256 "29e1e7d71ec146a5ac1b7a8568bdeed4b78321c36776f26db85551098a28fc4c"
 
       def install
         bin.install "gitops-zombies"
