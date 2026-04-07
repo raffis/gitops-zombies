@@ -4,7 +4,7 @@ import (
 	"context"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2"
-	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

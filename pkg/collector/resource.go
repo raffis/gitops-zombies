@@ -6,7 +6,7 @@ import (
 	"regexp"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2"
-	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/object"
