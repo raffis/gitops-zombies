@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	helmapi "github.com/fluxcd/helm-controller/api/v2"
-	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"

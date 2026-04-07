@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	ksapi "github.com/fluxcd/kustomize-controller/api/v1beta2"
+	ksapi "github.com/fluxcd/kustomize-controller/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/util/json"
