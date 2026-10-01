@@ -1,4 +1,4 @@
-FROM alpine:3.24@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 WORKDIR /
 COPY gitops-zombies /usr/bin/gitops-zombies
 USER 65532:65532
