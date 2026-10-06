@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Ensure SHA pinned actions
-        uses: zgosalvez/github-actions-ensure-sha-pinned-actions@62574f011e0d1967d555a862bd28a7abba8684fe # v5.0.9
+        uses: zgosalvez/github-actions-ensure-sha-pinned-actions@c4e71056006d29f90204b2d063be337109507d62 # v5.0.10
         with:
           # slsa-github-generator requires using a semver tag for reusable workflows. 
           # See: https://github.com/slsa-framework/slsa-github-generator#referencing-slsa-builders-and-generators
