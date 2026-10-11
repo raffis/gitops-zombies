@@ -12,7 +12,7 @@ jobs:
       issues: write
     steps:
     - name: Harden Runner
-      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
       with:
         egress-policy: audit
     - uses: actions/stale@1e223db275d687790206a7acac4d1a11bd6fe629 # v10.4.0
